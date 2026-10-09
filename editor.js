@@ -73,6 +73,7 @@
     setupPresetControls();
     setupImportExport();
     setupMotionAndPoseControls();
+    setupFaceAndBlinkControls();
     setupDrawerToggle();
 
     // Sync initial state from rig
@@ -261,6 +262,8 @@
       groupHeader.appendChild(groupChildren);
       treeContainer.appendChild(groupHeader);
     }
+
+    updateFacialStatusUI();
   }
 
   // =========================================================================
@@ -506,6 +509,10 @@
       else if (bVal === 'arms') bVal = 'arm_upper_l';
       else if (bVal === 'legs') bVal = 'leg_upper_l';
       selectParent.value = bVal;
+    }
+    const selectRole = document.getElementById('insp-facial-role');
+    if (selectRole) {
+      selectRole.value = item.facialRole || 'none';
     }
 
     // Helper to sync slider & number
@@ -1179,6 +1186,160 @@
         showToast(isVis ? 'Skeleton & Sendi ditampilkan!' : 'Skeleton disembunyikan.');
       });
     }
+  }
+
+  // =========================================================================
+  // FACIAL ROLE, BLINK & MOUTH CONTROLS (Wajah, Kedip & Mulut)
+  // =========================================================================
+  function updateFacialStatusUI() {
+    if (!currentRig || !currentRig.getFacialRoles) return;
+    const roles = currentRig.getFacialRoles();
+    const elEyeL = document.getElementById('status-role-eyel');
+    const elEyeR = document.getElementById('status-role-eyer');
+    const elMouth = document.getElementById('status-role-mouth');
+
+    if (elEyeL) elEyeL.textContent = roles.eye_left?.length ? roles.eye_left.join(', ') : 'Belum Ditentukan';
+    if (elEyeR) elEyeR.textContent = roles.eye_right?.length ? roles.eye_right.join(', ') : 'Belum Ditentukan';
+    if (elMouth) elMouth.textContent = roles.mouth?.length ? roles.mouth.join(', ') : 'Belum Ditentukan';
+  }
+
+  function setupFaceAndBlinkControls() {
+    // 1. 3D Facial Markers Toggle
+    const toggleMarkers = document.getElementById('toggle-facial-markers-switch');
+    if (toggleMarkers) {
+      toggleMarkers.addEventListener('change', () => {
+        if (!currentRig || !currentRig.setFacialMarkersVisibility) return;
+        currentRig.setFacialMarkersVisibility(toggleMarkers.checked);
+        const topMarkersBtn = document.getElementById('btn-facial-markers');
+        if (topMarkersBtn) topMarkersBtn.classList.toggle('active', toggleMarkers.checked);
+        showToast(toggleMarkers.checked ? 'Tanda fitur wajah di kepala aktif!' : 'Tanda fitur wajah disembunyikan.');
+      });
+    }
+
+    // 2. Auto-Blink Toggle
+    const toggleAutoBlink = document.getElementById('toggle-auto-blink');
+    if (toggleAutoBlink) {
+      toggleAutoBlink.addEventListener('change', () => {
+        if (!currentRig || !currentRig.setBlinkSettings) return;
+        currentRig.setBlinkSettings({ autoBlink: toggleAutoBlink.checked });
+        showToast(toggleAutoBlink.checked ? 'Kedip otomatis aktif!' : 'Kedip otomatis dimatikan.');
+      });
+    }
+
+    // 3. Blink Interval Slider
+    const sliderBlinkInt = document.getElementById('slider-blink-interval');
+    const valBlinkInt = document.getElementById('val-blink-interval');
+    if (sliderBlinkInt) {
+      sliderBlinkInt.addEventListener('input', () => {
+        const val = parseFloat(sliderBlinkInt.value);
+        if (valBlinkInt) valBlinkInt.textContent = val.toFixed(1) + 's';
+        if (currentRig && currentRig.setBlinkSettings) {
+          currentRig.setBlinkSettings({ interval: val });
+        }
+      });
+    }
+
+    // 4. Manual Blink (Squint) Slider
+    const sliderManualBlink = document.getElementById('slider-manual-blink');
+    const valManualBlink = document.getElementById('val-manual-blink');
+    if (sliderManualBlink) {
+      sliderManualBlink.addEventListener('input', () => {
+        const val = parseInt(sliderManualBlink.value, 10);
+        if (valManualBlink) valManualBlink.textContent = val + '%';
+        if (currentRig && currentRig.setBlinkSettings) {
+          currentRig.setBlinkSettings({ manualBlink: val / 100 });
+        }
+      });
+    }
+
+    // 5. Trigger Blink Once Button
+    const btnTriggerBlink = document.getElementById('btn-trigger-blink');
+    if (btnTriggerBlink) {
+      btnTriggerBlink.addEventListener('click', () => {
+        if (currentRig && currentRig.triggerBlink) {
+          currentRig.triggerBlink();
+          showToast('Mata dikedipkan! 👁️');
+        }
+      });
+    }
+
+    // 6. Blink Mode Buttons (both, right, left, closed)
+    const blinkModeBtns = document.querySelectorAll('.blink-mode-btn');
+    blinkModeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.getAttribute('data-blink-mode');
+        blinkModeBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (currentRig && currentRig.setBlinkSettings) {
+          currentRig.setBlinkSettings({ mode: mode });
+        }
+      });
+    });
+
+    // 7. Mouth Condition Preset Buttons
+    const mouthCondBtns = document.querySelectorAll('.mouth-cond-btn');
+    mouthCondBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cond = btn.getAttribute('data-mouth-cond');
+        mouthCondBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (currentRig && currentRig.setMouthSettings) {
+          currentRig.setMouthSettings({ condition: cond });
+        }
+      });
+    });
+
+    // 8. Mouth Open Slider
+    const sliderMouthOpen = document.getElementById('slider-mouth-open');
+    const valMouthOpen = document.getElementById('val-mouth-open');
+    if (sliderMouthOpen) {
+      sliderMouthOpen.addEventListener('input', () => {
+        const val = parseFloat(sliderMouthOpen.value);
+        if (valMouthOpen) valMouthOpen.textContent = val.toFixed(2);
+        if (currentRig && currentRig.setMouthSettings) {
+          currentRig.setMouthSettings({ open: val });
+        }
+      });
+    }
+
+    // 9. Mouth Width Slider
+    const sliderMouthWidth = document.getElementById('slider-mouth-width');
+    const valMouthWidth = document.getElementById('val-mouth-width');
+    if (sliderMouthWidth) {
+      sliderMouthWidth.addEventListener('input', () => {
+        const val = parseFloat(sliderMouthWidth.value);
+        if (valMouthWidth) valMouthWidth.textContent = val.toFixed(2) + '×';
+        if (currentRig && currentRig.setMouthSettings) {
+          currentRig.setMouthSettings({ width: val });
+        }
+      });
+    }
+
+    // 10. Mouth Curve Slider
+    const sliderMouthCurve = document.getElementById('slider-mouth-curve');
+    const valMouthCurve = document.getElementById('val-mouth-curve');
+    if (sliderMouthCurve) {
+      sliderMouthCurve.addEventListener('input', () => {
+        const val = parseFloat(sliderMouthCurve.value);
+        if (valMouthCurve) valMouthCurve.textContent = (val >= 0 ? '+' : '') + val.toFixed(2);
+        if (currentRig && currentRig.setMouthSettings) {
+          currentRig.setMouthSettings({ curve: val });
+        }
+      });
+    }
+
+    // 11. Auto-Talk Switch
+    const toggleAutoTalk = document.getElementById('toggle-auto-talk');
+    if (toggleAutoTalk) {
+      toggleAutoTalk.addEventListener('change', () => {
+        if (currentRig && currentRig.setMouthSettings) {
+          currentRig.setMouthSettings({ autoTalk: toggleAutoTalk.checked });
+          showToast(toggleAutoTalk.checked ? 'Animasi bicara aktif!' : 'Animasi bicara dimatikan.');
+        }
+      });
+    }
+
+    updateFacialStatusUI();
   }
 
   function downloadFile(content, fileName, mimeType) {

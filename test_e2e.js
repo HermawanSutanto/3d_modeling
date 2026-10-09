@@ -434,7 +434,211 @@ async function runTests() {
   await page.click('#btn-skeleton');
   await page.waitForTimeout(200);
 
-  // 14. Uji Ekspor Proyek JSON
+  // 14. Uji Penandaan Peran Wajah (Facial Role Switch & 3D Markers)
+  console.log('🎭 Menguji Switch Peran Fitur Wajah (Facial Roles) & 3D Markers di Kepala...');
+  
+  // Periksa default roles
+  const defaultRolesCheck = await page.evaluate(() => {
+    const roles = window.appRig.getFacialRoles();
+    return {
+      hasLeftEye: roles.eye_left.includes('eye_left'),
+      hasRightEye: roles.eye_right.includes('eye_right'),
+      hasMouth: roles.mouth.includes('mouth_smile')
+    };
+  });
+  console.log('✓ Status Peran Wajah Bawaan:', defaultRolesCheck);
+  if (!defaultRolesCheck.hasLeftEye || !defaultRolesCheck.hasRightEye || !defaultRolesCheck.hasMouth) {
+    throw new Error('Peran fitur wajah bawaan tidak terdeteksi!');
+  }
+
+  // Uji Switch Peran Wajah di Inspector: Ubah nose_cone menjadi role 'mouth'
+  await page.evaluate(() => {
+    window.CharacterEditor.selectPart('nose_cone');
+    const roleSelect = document.getElementById('insp-facial-role');
+    roleSelect.value = 'mouth';
+    roleSelect.dispatchEvent(new Event('change'));
+  });
+  await page.waitForTimeout(300);
+
+  const roleSwitchedCheck = await page.evaluate(() => {
+    const roles = window.appRig.getFacialRoles();
+    const mesh = window.appRig.registeredParts.get('nose_cone');
+    return {
+      meshRole: mesh?.userData?.facialRole,
+      inMouthList: roles.mouth.includes('nose_cone')
+    };
+  });
+  console.log('✓ Hasil Switch Peran nose_cone menjadi mouth:', roleSwitchedCheck);
+  if (roleSwitchedCheck.meshRole !== 'mouth' || !roleSwitchedCheck.inMouthList) {
+    throw new Error('Switch peran wajah gagal diterapkan!');
+  }
+
+  // Kembalikan peran nose_cone ke 'nose'
+  await page.evaluate(() => {
+    const roleSelect = document.getElementById('insp-facial-role');
+    roleSelect.value = 'nose';
+    roleSelect.dispatchEvent(new Event('change'));
+  });
+  await page.waitForTimeout(200);
+
+  // Uji Toggle 3D Facial Markers di Kepala via Dock
+  console.log('🏷️ Menguji Toggle 3D Facial Markers di Kepala...');
+  await page.click('#btn-facial-markers');
+  await page.waitForTimeout(300);
+
+  const markersActive = await page.evaluate(() => {
+    return {
+      btnActive: document.getElementById('btn-facial-markers').classList.contains('active'),
+      vis: window.appRig.getFacialMarkersVisibility()
+    };
+  });
+  console.log('✓ Status 3D Facial Markers:', markersActive);
+  if (!markersActive.btnActive || !markersActive.vis) {
+    throw new Error('3D Facial Markers gagal diaktifkan!');
+  }
+
+  // Ambil screenshot dengan penanda wajah 3D aktif
+  const facialMarkersScreenshotPath = path.resolve(__dirname, 'screenshot_facial_markers.png');
+  await page.screenshot({ path: facialMarkersScreenshotPath });
+  console.log(`📸 Screenshot Facial Markers tersimpan: ${facialMarkersScreenshotPath}`);
+
+  // 15. Uji Kontrol Mata & Animasi Kedip (Blink Engine)
+  console.log('👁️ Menguji Tab Wajah & Kedip: Kontrol Mata & Animasi Kedip...');
+  await page.click('.editor-tab-btn[data-tab="face"]');
+  await page.waitForTimeout(300);
+
+  const isFaceTabActive = await page.evaluate(() => {
+    return document.getElementById('tab-face').classList.contains('active');
+  });
+  console.log(`✓ Status Tab Wajah & Kedip: ${isFaceTabActive ? 'Aktif (PASS)' : 'Gagal'}`);
+  if (!isFaceTabActive) throw new Error('Tab Wajah & Kedip gagal dibuka!');
+
+  // Uji slider kedipan manual (Squint / Pejam)
+  await page.evaluate(() => {
+    const slider = document.getElementById('slider-manual-blink');
+    slider.value = 85;
+    slider.dispatchEvent(new Event('input'));
+    window.appRig.animator.updateBlink(0.016);
+  });
+  await page.waitForTimeout(200);
+
+  const manualBlinkCheck = await page.evaluate(() => {
+    const eyeLScaleY = window.appRig.leftEye.scale.y;
+    const eyeRScaleY = window.appRig.rightEye.scale.y;
+    return {
+      eyeLScaleY: +(eyeLScaleY).toFixed(2),
+      eyeRScaleY: +(eyeRScaleY).toFixed(2)
+    };
+  });
+  console.log('✓ Hasil Kedipan Manual (Squint 85%):', manualBlinkCheck);
+  if (manualBlinkCheck.eyeLScaleY > 0.35 || manualBlinkCheck.eyeRScaleY > 0.35) {
+    throw new Error('Slider kedipan manual gagal mengecilkan kelopak mata!');
+  }
+
+  // Reset slider kedipan manual ke 0%
+  await page.evaluate(() => {
+    const slider = document.getElementById('slider-manual-blink');
+    slider.value = 0;
+    slider.dispatchEvent(new Event('input'));
+    window.appRig.animator.updateBlink(0.016);
+  });
+  await page.waitForTimeout(200);
+
+  // Uji Trigger Sekali Kedip
+  await page.click('#btn-trigger-blink');
+  await page.waitForTimeout(100);
+  const triggerCheck = await page.evaluate(() => {
+    return window.appRig.animator.isBlinking;
+  });
+  console.log(`✓ Status Trigger Blink Instan: ${triggerCheck ? 'Blinking (PASS)' : 'Normal'}`);
+
+  // Uji Mode Kedip Kanan Saja (Wink)
+  await page.click('.blink-mode-btn[data-blink-mode="right"]');
+  await page.waitForTimeout(200);
+  const winkModeCheck = await page.evaluate(() => {
+    return window.appRig.animator.blinkSettings.mode === 'right';
+  });
+  console.log(`✓ Status Mode Kedip Kanan (Wink): ${winkModeCheck ? 'PASS' : 'Gagal'}`);
+  if (!winkModeCheck) throw new Error('Mode kedip kanan gagal diaktifkan!');
+
+  // Kembalikan ke mode normal (both)
+  await page.click('.blink-mode-btn[data-blink-mode="both"]');
+  await page.waitForTimeout(150);
+
+  // 16. Uji Kontrol Kondisi & Bentuk Mulut (Mouth Condition & Shape Engine)
+  console.log('👄 Menguji Kontrol Kondisi & Bentuk Mulut...');
+  
+  // Uji preset kondisi mulut: Cemberut (Sad / Frown)
+  await page.click('.mouth-cond-btn[data-mouth-cond="sad"]');
+  await page.waitForTimeout(200);
+
+  const mouthSadCheck = await page.evaluate(() => {
+    const cfg = window.CharacterEditor.getConfig();
+    const mouthSadMesh = window.appRig.registeredParts.get('mouth_sad');
+    return {
+      exprMouth: cfg.expression.mouth,
+      mouthSadVisible: !!(mouthSadMesh && mouthSadMesh.visible)
+    };
+  });
+  console.log('✓ Status Mulut Cemberut (Sad):', mouthSadCheck);
+  if (mouthSadCheck.exprMouth !== 'sad' || !mouthSadCheck.mouthSadVisible) {
+    throw new Error('Preset kondisi mulut sad gagal diaktifkan!');
+  }
+
+  // Uji slider bentuk mulut (Open & Width)
+  await page.evaluate(() => {
+    const sliderOpen = document.getElementById('slider-mouth-open');
+    sliderOpen.value = '0.75';
+    sliderOpen.dispatchEvent(new Event('input'));
+
+    const sliderWidth = document.getElementById('slider-mouth-width');
+    sliderWidth.value = '1.40';
+    sliderWidth.dispatchEvent(new Event('input'));
+
+    window.appRig.animator.updateMouth(0.016);
+  });
+  await page.waitForTimeout(200);
+
+  const mouthShapeCheck = await page.evaluate(() => {
+    const mg = window.appRig.mouthGroup;
+    return {
+      scaleX: +(mg.scale.x).toFixed(2),
+      scaleY: +(mg.scale.y).toFixed(2)
+    };
+  });
+  console.log('✓ Modulasi Bentuk Mulut (Open & Width):', mouthShapeCheck);
+  if (mouthShapeCheck.scaleX < 1.3 || mouthShapeCheck.scaleY < 1.4) {
+    throw new Error('Modulasi bentuk mulut gagal diterapkan!');
+  }
+
+  // Uji Toggle Auto-Talk
+  await page.evaluate(() => {
+    const talkToggle = document.getElementById('toggle-auto-talk');
+    talkToggle.checked = true;
+    talkToggle.dispatchEvent(new Event('change'));
+  });
+  await page.waitForTimeout(200);
+  const autoTalkCheck = await page.evaluate(() => {
+    return window.appRig.animator.mouthSettings.autoTalk === true;
+  });
+  console.log(`✓ Status Auto-Talk: ${autoTalkCheck ? 'Aktif (PASS)' : 'Gagal'}`);
+  if (!autoTalkCheck) throw new Error('Auto-talk gagal diaktifkan!');
+
+  // Matikan auto-talk dan kembalikan ke preset senyum (smile)
+  await page.evaluate(() => {
+    const talkToggle = document.getElementById('toggle-auto-talk');
+    talkToggle.checked = false;
+    talkToggle.dispatchEvent(new Event('change'));
+  });
+  await page.click('.mouth-cond-btn[data-mouth-cond="smile"]');
+  await page.waitForTimeout(200);
+
+  // Ambil screenshot tampilan Tab Wajah & Kedip
+  const faceScreenshotPath = path.resolve(__dirname, 'screenshot_face_blink_mouth_editor.png');
+  await page.screenshot({ path: faceScreenshotPath });
+  console.log(`📸 Screenshot Face & Blink Editor tersimpan: ${faceScreenshotPath}`);
+
+  // 17. Uji Ekspor Proyek JSON
   console.log('📦 Menguji Integritas Proyek & Konfigurasi JSON...');
   await page.click('.editor-tab-btn[data-tab="presets"]');
   await page.waitForTimeout(300);
@@ -453,7 +657,7 @@ async function runTests() {
     partsCount: projectExportCheck.partsCount
   });
 
-  // 15. Cek Konsol untuk Error
+  // 18. Cek Konsol untuk Error
   if (consoleErrors.length > 0) {
     console.error('❌ Terdapat Error pada Console:', consoleErrors);
     throw new Error('Ditemukan console error: ' + JSON.stringify(consoleErrors));
