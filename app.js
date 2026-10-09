@@ -31,6 +31,7 @@
     const aspect = container.clientWidth / container.clientHeight;
     camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 100);
     camera.position.set(3.8, 4.6, 17.0);
+    window.appCamera = camera;
 
     // 3. RENDERER (Studio Quality)
     renderer = new THREE.WebGLRenderer({
@@ -49,10 +50,13 @@
     } else if (renderer.outputColorSpace !== undefined && THREE.SRGBColorSpace !== undefined) {
       renderer.outputColorSpace = THREE.SRGBColorSpace;
     }
+    renderer.localClippingEnabled = true;
+    window.appRenderer = renderer;
     container.appendChild(renderer.domElement);
 
     // 4. CONTROLS (Smooth OrbitControls)
     controls = new THREE.OrbitControls(camera, renderer.domElement);
+    window.appControls = controls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.target.copy(TARGET_POS);

@@ -75,6 +75,7 @@
     setupMotionAndPoseControls();
     setupFaceAndBlinkControls();
     setupDrawerToggle();
+    setupSculptCanvasInteraction();
 
     // Sync initial state from rig
     const initialConfig = currentRig.getConfig ? currentRig.getConfig() : DEFAULT_CONFIG;
@@ -144,8 +145,18 @@
   }
 
   // =========================================================================
-  // 1. OUTLINER HIERARCHY TREE
+  // 1. OUTLINER HIERARCHY TREE & GROUPING
   // =========================================================================
+  let isGroupSelectionMode = false;
+  const selectedForGrouping = new Set();
+
+  function updateGroupCountBadge() {
+    const countSpan = document.getElementById('tree-selected-count');
+    if (countSpan) {
+      countSpan.textContent = selectedForGrouping.size;
+    }
+  }
+
   function setupOutlinerTree() {
     const btnAddPartHeader = document.getElementById('btn-tree-add-part');
     if (btnAddPartHeader) {
@@ -153,6 +164,135 @@
         switchTab('addpart');
       });
     }
+
+    const btnGroupMode = document.getElementById('btn-tree-group-mode');
+    const groupActionBar = document.getElementById('tree-group-action-bar');
+    const btnConfirmGroup = document.getElementById('btn-confirm-create-group');
+    const btnCancelGroup = document.getElementById('btn-cancel-create-group');
+    const inputGroupName = document.getElementById('input-group-name');
+
+    if (btnGroupMode) {
+      btnGroupMode.addEventListener('click', () => {
+        isGroupSelectionMode = !isGroupSelectionMode;
+        btnGroupMode.classList.toggle('active', isGroupSelectionMode);
+        if (groupActionBar) {
+          groupActionBar.style.display = isGroupSelectionMode ? 'flex' : 'none';
+        }
+        if (!isGroupSelectionMode) {
+          selectedForGrouping.clear();
+        }
+        updateGroupCountBadge();
+        refreshOutlinerTree();
+      });
+    }
+
+    if (btnCancelGroup) {
+      btnCancelGroup.addEventListener('click', () => {
+        isGroupSelectionMode = false;
+        selectedForGrouping.clear();
+        if (btnGroupMode) btnGroupMode.classList.remove('active');
+        if (groupActionBar) groupActionBar.style.display = 'none';
+        refreshOutlinerTree();
+      });
+    }
+
+    if (btnConfirmGroup) {
+      btnConfirmGroup.addEventListener('click', () => {
+        if (!currentRig || !currentRig.createCustomGroup) return;
+        const partIds = Array.from(selectedForGrouping);
+        if (partIds.length < 2) {
+          showToast('Pilih minimal 2 objek untuk digabungkan menjadi Grup!');
+          return;
+        }
+
+        const name = (inputGroupName && inputGroupName.value.trim()) || `Grup_${Math.floor(Math.random() * 900) + 100}`;
+        const newGroupId = currentRig.createCustomGroup(name, partIds);
+        if (newGroupId) {
+          selectedForGrouping.clear();
+          isGroupSelectionMode = false;
+          if (btnGroupMode) btnGroupMode.classList.remove('active');
+          if (groupActionBar) groupActionBar.style.display = 'none';
+          showToast(`Grup "${name}" berhasil dibuat (${partIds.length} part digabungkan)!`);
+          selectPart(newGroupId);
+          refreshOutlinerTree();
+          switchTab('inspector');
+        }
+      });
+    }
+  }
+
+  function createTreeItemElement(item) {
+    const itemNode = document.createElement('div');
+    itemNode.className = `tree-item-node ${item.id === selectedPartId ? 'selected' : ''}`;
+    itemNode.setAttribute('data-part-id', item.id);
+
+    let icon = '🔷';
+    if (item.geomType === 'cone') icon = '🔺';
+    else if (item.geomType === 'sphere') icon = '⚪';
+    else if (item.geomType === 'cylinder') icon = '🥫';
+    else if (item.geomType === 'box') icon = '📦';
+    else if (item.geomType === 'torus') icon = '🍩';
+
+    let roleBadge = '';
+    if (item.facialRole === 'eye_left') roleBadge = '<span class="tree-role-pill eye">👁️L</span>';
+    else if (item.facialRole === 'eye_right') roleBadge = '<span class="tree-role-pill eye">👁️R</span>';
+    else if (item.facialRole === 'mouth') roleBadge = '<span class="tree-role-pill mouth">👄Mulut</span>';
+    else if (item.facialRole === 'nose') roleBadge = '<span class="tree-role-pill nose">👃Hidung</span>';
+    else if (item.facialRole === 'eyebrow_left') roleBadge = '<span class="tree-role-pill eyebrow">🤨Alis L</span>';
+    else if (item.facialRole === 'eyebrow_right') roleBadge = '<span class="tree-role-pill eyebrow">🤨Alis R</span>';
+
+    let checkboxHtml = '';
+    if (isGroupSelectionMode && !item.isGroup) {
+      checkboxHtml = `<input type="checkbox" class="tree-item-checkbox" data-part-id="${item.id}" ${selectedForGrouping.has(item.id) ? 'checked' : ''} />`;
+    }
+
+    itemNode.innerHTML = `
+      <div class="tree-item-label">
+        ${checkboxHtml}
+        <span class="tree-item-icon">${icon}</span>
+        <span class="tree-item-name" title="${item.name}">${item.name}</span>
+        ${roleBadge}
+      </div>
+      <div class="tree-item-actions">
+        <button class="tree-btn-vis ${item.visible ? '' : 'hidden'}" title="Tampilkan/Sembunyikan">
+          ${item.visible ? '👁️' : '🚫'}
+        </button>
+      </div>
+    `;
+
+    // Click checkbox
+    const chk = itemNode.querySelector('.tree-item-checkbox');
+    if (chk) {
+      chk.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      chk.addEventListener('change', (e) => {
+        e.stopPropagation();
+        if (chk.checked) selectedForGrouping.add(item.id);
+        else selectedForGrouping.delete(item.id);
+        updateGroupCountBadge();
+      });
+    }
+
+    // Click to select
+    itemNode.addEventListener('click', (e) => {
+      if (e.target.closest('.tree-btn-vis') || e.target.closest('.tree-item-checkbox')) return;
+      selectPart(item.id);
+      switchTab('inspector');
+    });
+
+    // Toggle visibility
+    const visBtn = itemNode.querySelector('.tree-btn-vis');
+    if (visBtn) {
+      visBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newVis = !item.visible;
+        currentRig.setObjectVisibility(item.id, newVis);
+        refreshOutlinerTree();
+      });
+    }
+
+    return itemNode;
   }
 
   function refreshOutlinerTree() {
@@ -168,7 +308,10 @@
       groups[key] = [];
     }
 
+    // Collect root items (not nested inside a custom group)
     parts.forEach((p) => {
+      if (p.parentGroupId) return; // Child of a group, will be rendered inside group container!
+
       let bId = p.boneId || p.category;
       if (['hair', 'face', 'ears', 'head'].includes(bId)) bId = 'head';
       else if (bId === 'arms') bId = 'arm_upper_l';
@@ -205,57 +348,79 @@
       });
 
       catItems.forEach((item) => {
-        const itemNode = document.createElement('div');
-        itemNode.className = `tree-item-node ${item.id === selectedPartId ? 'selected' : ''}`;
-        itemNode.setAttribute('data-part-id', item.id);
+        if (item.isGroup) {
+          // Render compound group node
+          const subgroupBox = document.createElement('div');
+          subgroupBox.className = `tree-subgroup-box ${item.id === selectedPartId ? 'selected' : ''}`;
+          subgroupBox.setAttribute('data-group-id', item.id);
 
-        let icon = '🔷';
-        if (item.geomType === 'cone') icon = '🔺';
-        else if (item.geomType === 'sphere') icon = '⚪';
-        else if (item.geomType === 'cylinder') icon = '🥫';
-        else if (item.geomType === 'box') icon = '📦';
-        else if (item.geomType === 'torus') icon = '🍩';
+          const subgroupHeader = document.createElement('div');
+          subgroupHeader.className = `tree-subgroup-header ${item.id === selectedPartId ? 'selected' : ''}`;
+          subgroupHeader.innerHTML = `
+            <div class="tree-subgroup-title" style="display:flex; align-items:center; gap:6px;">
+              <span>📁</span>
+              <span style="font-weight:700;">${item.name}</span>
+              <span class="badge-tag-sm" style="font-size:10px; background:#bae6fd; color:#0369a1;">${item.childIds ? item.childIds.length : 0} item</span>
+            </div>
+            <div class="tree-subgroup-actions" style="display:flex; gap:4px; align-items:center;">
+              <button class="tree-btn-ungroup" data-group-id="${item.id}" title="Pisahkan Grup (Ungroup)" style="background:none; border:none; cursor:pointer; font-size:12px;">✂️</button>
+              <button class="tree-btn-vis ${item.visible ? '' : 'hidden'}" title="Tampilkan/Sembunyikan">
+                ${item.visible ? '👁️' : '🚫'}
+              </button>
+            </div>
+          `;
 
-        let roleBadge = '';
-        if (item.facialRole === 'eye_left') roleBadge = '<span class="tree-role-pill eye">👁️L</span>';
-        else if (item.facialRole === 'eye_right') roleBadge = '<span class="tree-role-pill eye">👁️R</span>';
-        else if (item.facialRole === 'mouth') roleBadge = '<span class="tree-role-pill mouth">👄Mulut</span>';
-        else if (item.facialRole === 'nose') roleBadge = '<span class="tree-role-pill nose">👃Hidung</span>';
-        else if (item.facialRole === 'eyebrow_left') roleBadge = '<span class="tree-role-pill eyebrow">🤨Alis L</span>';
-        else if (item.facialRole === 'eyebrow_right') roleBadge = '<span class="tree-role-pill eyebrow">🤨Alis R</span>';
-
-        itemNode.innerHTML = `
-          <div class="tree-item-label">
-            <span class="tree-item-icon">${icon}</span>
-            <span class="tree-item-name" title="${item.name}">${item.name}</span>
-            ${roleBadge}
-          </div>
-          <div class="tree-item-actions">
-            <button class="tree-btn-vis ${item.visible ? '' : 'hidden'}" title="Tampilkan/Sembunyikan">
-              ${item.visible ? '👁️' : '🚫'}
-            </button>
-          </div>
-        `;
-
-        // Click to select
-        itemNode.addEventListener('click', (e) => {
-          if (e.target.closest('.tree-btn-vis')) return;
-          selectPart(item.id);
-          switchTab('inspector');
-        });
-
-        // Toggle visibility
-        const visBtn = itemNode.querySelector('.tree-btn-vis');
-        if (visBtn) {
-          visBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const newVis = !item.visible;
-            currentRig.setObjectVisibility(item.id, newVis);
-            refreshOutlinerTree();
+          // Select group on header click
+          subgroupHeader.addEventListener('click', (e) => {
+            if (e.target.closest('.tree-btn-ungroup') || e.target.closest('.tree-btn-vis')) return;
+            selectPart(item.id);
+            switchTab('inspector');
           });
-        }
 
-        groupChildren.appendChild(itemNode);
+          // Ungroup button
+          const btnUngroup = subgroupHeader.querySelector('.tree-btn-ungroup');
+          if (btnUngroup) {
+            btnUngroup.addEventListener('click', (e) => {
+              e.stopPropagation();
+              currentRig.ungroup(item.id);
+              showToast(`Grup "${item.name}" berhasil dipisahkan!`);
+              refreshOutlinerTree();
+            });
+          }
+
+          // Visibility toggle
+          const visBtn = subgroupHeader.querySelector('.tree-btn-vis');
+          if (visBtn) {
+            visBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const newVis = !item.visible;
+              currentRig.setObjectVisibility(item.id, newVis);
+              refreshOutlinerTree();
+            });
+          }
+
+          // Render children inside subgroup
+          const subgroupChildren = document.createElement('div');
+          subgroupChildren.className = 'tree-subgroup-children';
+
+          if (item.childIds && item.childIds.length > 0) {
+            item.childIds.forEach((childId) => {
+              const childObj = parts.find((p) => p.id === childId);
+              if (childObj) {
+                const childNode = createTreeItemElement(childObj);
+                subgroupChildren.appendChild(childNode);
+              }
+            });
+          }
+
+          subgroupBox.appendChild(subgroupHeader);
+          subgroupBox.appendChild(subgroupChildren);
+          groupChildren.appendChild(subgroupBox);
+        } else {
+          // Regular item
+          const itemNode = createTreeItemElement(item);
+          groupChildren.appendChild(itemNode);
+        }
       });
 
       groupHeader.appendChild(groupTitle);
@@ -409,6 +574,224 @@
         }
       });
     }
+
+    // Ungroup button in inspector
+    const btnInspUngroup = document.getElementById('btn-insp-ungroup');
+    if (btnInspUngroup) {
+      btnInspUngroup.addEventListener('click', () => {
+        if (!selectedPartId || !currentRig) return;
+        const success = currentRig.ungroup(selectedPartId);
+        if (success) {
+          showToast('Grup berhasil dipisahkan menjadi part individual!');
+          selectedPartId = null;
+          populateInspector(null);
+          refreshOutlinerTree();
+        }
+      });
+    }
+
+    // Slicing (Half-Cut) controls
+    const sliceBtns = document.querySelectorAll('.slice-btn');
+    sliceBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!selectedPartId || !currentRig) return;
+        const axis = btn.getAttribute('data-slice-axis');
+        sliceBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRig.sliceObjectHalf(selectedPartId, axis, isSliceInverted);
+        populateInspector(selectedPartId);
+        showToast(`Objek dipotong separuh pada sumbu ${axis.toUpperCase()}!`);
+      });
+    });
+
+    const btnSliceInvert = document.getElementById('btn-slice-invert');
+    if (btnSliceInvert) {
+      btnSliceInvert.addEventListener('click', () => {
+        if (!selectedPartId || !currentRig) return;
+        isSliceInverted = !isSliceInverted;
+        btnSliceInvert.classList.toggle('active', isSliceInverted);
+        const parts = currentRig.getObjectList ? currentRig.getObjectList() : [];
+        const cur = parts.find((p) => p.id === selectedPartId);
+        if (cur && cur.isSliced) {
+          currentRig.sliceObjectHalf(selectedPartId, cur.sliceAxis || 'x', isSliceInverted);
+          populateInspector(selectedPartId);
+        }
+        showToast(isSliceInverted ? 'Arah potongan dibalik!' : 'Arah potongan normal.');
+      });
+    }
+
+    const btnSliceReset = document.getElementById('btn-slice-reset');
+    if (btnSliceReset) {
+      btnSliceReset.addEventListener('click', () => {
+        if (!selectedPartId || !currentRig) return;
+        currentRig.restoreOriginalGeometry(selectedPartId);
+        sliceBtns.forEach((b) => b.classList.remove('active'));
+        populateInspector(selectedPartId);
+        showToast('Potongan dipulihkan utuh!');
+      });
+    }
+
+    // Sculpting (Freeform Brush) controls
+    const btnToggleSculpt = document.getElementById('btn-toggle-sculpt-mode');
+    const textToggleSculpt = document.getElementById('text-toggle-sculpt');
+    const badgeSculptStatus = document.getElementById('badge-sculpt-status');
+    const sculptControlsBody = document.getElementById('sculpt-controls-body');
+
+    if (btnToggleSculpt) {
+      btnToggleSculpt.addEventListener('click', () => {
+        if (!selectedPartId) {
+          showToast('Pilih objek terlebih dahulu untuk memahat!');
+          return;
+        }
+        isSculptModeActive = !isSculptModeActive;
+        updateSculptModeUI();
+      });
+    }
+
+    function updateSculptModeUI() {
+      if (isSculptModeActive) {
+        if (textToggleSculpt) textToggleSculpt.textContent = 'Hentikan Mode Pahat (Selesai)';
+        if (badgeSculptStatus) {
+          badgeSculptStatus.textContent = 'AKTIF 🖌️';
+          badgeSculptStatus.style.background = '#0284c7';
+        }
+        if (sculptControlsBody) sculptControlsBody.style.display = 'block';
+        if (btnToggleSculpt) btnToggleSculpt.style.background = '#0284c7';
+        showToast('Mode Pahat Aktif! Klik & geser kursor di permukaan objek.');
+      } else {
+        if (textToggleSculpt) textToggleSculpt.textContent = 'Mulai Memahat (Sculpt Mode)';
+        if (badgeSculptStatus) {
+          badgeSculptStatus.textContent = 'NONAKTIF';
+          badgeSculptStatus.style.background = '#64748b';
+        }
+        if (sculptControlsBody) sculptControlsBody.style.display = 'none';
+        if (btnToggleSculpt) btnToggleSculpt.style.background = '';
+        if (window.appControls) window.appControls.enabled = true;
+      }
+    }
+
+    const sculptBrushBtns = document.querySelectorAll('.sculpt-type-btn');
+    sculptBrushBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sculptBrushBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSculptBrush = btn.getAttribute('data-brush') || 'pull';
+      });
+    });
+
+    const sliderSculptRadius = document.getElementById('slider-sculpt-radius');
+    const valSculptRadius = document.getElementById('val-sculpt-radius');
+    if (sliderSculptRadius) {
+      sliderSculptRadius.addEventListener('input', () => {
+        sculptRadius = parseFloat(sliderSculptRadius.value);
+        if (valSculptRadius) valSculptRadius.textContent = sculptRadius.toFixed(2);
+      });
+    }
+
+    const sliderSculptStrength = document.getElementById('slider-sculpt-strength');
+    const valSculptStrength = document.getElementById('val-sculpt-strength');
+    if (sliderSculptStrength) {
+      sliderSculptStrength.addEventListener('input', () => {
+        sculptStrength = parseFloat(sliderSculptStrength.value);
+        if (valSculptStrength) valSculptStrength.textContent = sculptStrength.toFixed(2);
+      });
+    }
+
+    const btnSculptReset = document.getElementById('btn-sculpt-reset');
+    if (btnSculptReset) {
+      btnSculptReset.addEventListener('click', () => {
+        if (!selectedPartId || !currentRig) return;
+        currentRig.restoreOriginalGeometry(selectedPartId);
+        populateInspector(selectedPartId);
+        showToast('Bentuk objek di-reset ke geometri asli!');
+      });
+    }
+  }
+
+  // Slicing state
+  let isSliceInverted = false;
+
+  // Sculpting state
+  let isSculptModeActive = false;
+  let currentSculptBrush = 'pull';
+  let sculptRadius = 0.35;
+  let sculptStrength = 0.15;
+
+  function setupSculptCanvasInteraction() {
+    const canvasContainer = document.getElementById('canvas-container');
+    const canvas = canvasContainer ? canvasContainer.querySelector('canvas') : null;
+    if (!canvas) return;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isSculptDragging = false;
+
+    function getIntersect(e) {
+      if (!selectedPartId || !currentRig || !currentRig.registeredParts) return null;
+      const mesh = currentRig.registeredParts.get(selectedPartId);
+      if (!mesh || mesh.userData.isGroup) return null;
+
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      const camera = window.appCamera;
+      if (!camera) return null;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(mesh, true);
+      if (intersects.length > 0) {
+        return { hit: intersects[0], mesh: mesh };
+      }
+      return null;
+    }
+
+    function applySculpt(hitInfo) {
+      if (!hitInfo || !hitInfo.hit) return;
+      const { hit, mesh } = hitInfo;
+      const localPoint = mesh.worldToLocal(hit.point.clone());
+      let localNormal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+
+      currentRig.sculptObjectVertex(
+        selectedPartId,
+        localPoint,
+        localNormal,
+        currentSculptBrush,
+        sculptRadius,
+        sculptStrength
+      );
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!isSculptModeActive) return;
+      if (e.button !== 0) return;
+      const hitInfo = getIntersect(e);
+      if (hitInfo) {
+        isSculptDragging = true;
+        if (window.appControls) window.appControls.enabled = false;
+        applySculpt(hitInfo);
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isSculptModeActive || !isSculptDragging) return;
+      const hitInfo = getIntersect(e);
+      if (hitInfo) {
+        applySculpt(hitInfo);
+      }
+    });
+
+    const stopSculpt = () => {
+      if (isSculptDragging) {
+        isSculptDragging = false;
+        if (window.appControls) window.appControls.enabled = true;
+        if (selectedPartId) populateInspector(selectedPartId);
+      }
+    };
+
+    window.addEventListener('pointerup', stopSculpt);
+    window.addEventListener('pointercancel', stopSculpt);
   }
 
   function setupTransformBinding(idPrefix, updateFn) {
@@ -502,7 +885,7 @@
     const selectParent = document.getElementById('insp-part-parent');
 
     if (inputName) inputName.value = item.name;
-    if (badgeType) badgeType.textContent = item.geomType.toUpperCase();
+    if (badgeType) badgeType.textContent = item.isGroup ? 'GROUP 📁' : item.geomType.toUpperCase();
     if (selectParent) {
       let bVal = item.boneId || item.category;
       if (['hair', 'face', 'ears'].includes(bVal)) bVal = 'head';
@@ -513,6 +896,54 @@
     const selectRole = document.getElementById('insp-facial-role');
     if (selectRole) {
       selectRole.value = item.facialRole || 'none';
+    }
+
+    // Toggle Group vs Individual Mesh sections
+    const groupSection = document.getElementById('insp-group-section');
+    const groupChildrenList = document.getElementById('insp-group-children-list');
+    const facialRoleRow = selectRole ? selectRole.closest('.control-row-flush') : null;
+    const colorSection = document.getElementById('insp-part-color') ? document.getElementById('insp-part-color').closest('.transform-section') : null;
+    const sliceSection = document.getElementById('insp-slice-section');
+    const sculptSection = document.getElementById('insp-sculpt-section');
+
+    if (item.isGroup) {
+      if (groupSection) groupSection.style.display = 'block';
+      if (facialRoleRow) facialRoleRow.style.display = 'none';
+      if (colorSection) colorSection.style.display = 'none';
+      if (sliceSection) sliceSection.style.display = 'none';
+      if (sculptSection) sculptSection.style.display = 'none';
+
+      if (groupChildrenList && item.childIds) {
+        groupChildrenList.innerHTML = `<div style="font-weight:600; margin-bottom:4px;">Part Tergabung (${item.childIds.length}):</div>` +
+          item.childIds.map((cid) => {
+            const childObj = parts.find((p) => p.id === cid);
+            return `<div style="padding:2px 0;">• ${childObj ? childObj.name : cid}</div>`;
+          }).join('');
+      }
+    } else {
+      if (groupSection) groupSection.style.display = 'none';
+      if (facialRoleRow) facialRoleRow.style.display = 'block';
+      if (colorSection) colorSection.style.display = 'block';
+      if (sliceSection) sliceSection.style.display = 'block';
+      if (sculptSection) sculptSection.style.display = 'block';
+
+      // Update slice button active highlights
+      const sliceBtns = document.querySelectorAll('.slice-btn');
+      sliceBtns.forEach((b) => {
+        b.classList.toggle('active', !!(item.isSliced && b.getAttribute('data-slice-axis') === item.sliceAxis));
+      });
+
+      // Update sculpt badge
+      const badgeSculpt = document.getElementById('badge-sculpt-status');
+      if (badgeSculpt) {
+        if (item.isSculpted) {
+          badgeSculpt.textContent = 'DI-SCULPT 🖌️';
+          badgeSculpt.style.background = '#8b5cf6';
+        } else if (!isSculptModeActive) {
+          badgeSculpt.textContent = 'NONAKTIF';
+          badgeSculpt.style.background = '#64748b';
+        }
+      }
     }
 
     // Helper to sync slider & number
@@ -544,10 +975,10 @@
     const sliderRough = document.getElementById('insp-part-rough');
     const badgeRough = document.getElementById('insp-val-rough');
 
-    if (inputColor) inputColor.value = item.color;
-    if (spanHex) spanHex.textContent = String(item.color).toUpperCase();
-    if (sliderRough) sliderRough.value = item.roughness;
-    if (badgeRough) badgeRough.textContent = Number(item.roughness).toFixed(2);
+    if (inputColor && item.color) inputColor.value = item.color;
+    if (spanHex && item.color) spanHex.textContent = String(item.color).toUpperCase();
+    if (sliderRough && item.roughness !== undefined) sliderRough.value = item.roughness;
+    if (badgeRough && item.roughness !== undefined) badgeRough.textContent = Number(item.roughness).toFixed(2);
   }
 
   // =========================================================================

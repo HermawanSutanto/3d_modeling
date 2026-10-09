@@ -1462,7 +1462,13 @@
           category: mesh.userData.category || 'misc',
           boneId: mesh.userData.boneId || mesh.userData.category || 'torso',
           facialRole: mesh.userData.facialRole || 'none',
-          geomType: mesh.userData.geomType || 'Mesh',
+          geomType: mesh.userData.isGroup ? 'group' : (mesh.userData.geomType || 'Mesh'),
+          isGroup: !!mesh.userData.isGroup,
+          parentGroupId: mesh.userData.parentGroupId || null,
+          childIds: mesh.userData.childIds ? [...mesh.userData.childIds] : [],
+          isSliced: !!mesh.userData.isSliced,
+          sliceAxis: mesh.userData.sliceAxis || null,
+          isSculpted: !!mesh.userData.isSculpted,
           isCustom: !!mesh.userData.isCustom,
           visible: mesh.visible,
           position: {
@@ -1649,6 +1655,9 @@
     rig.deleteObject = function (partId) {
       const mesh = registeredParts.get(partId);
       if (!mesh || !mesh.parent) return false;
+      if (mesh.userData.isGroup) {
+        return rig.ungroup(partId);
+      }
       if (rig.selectedPartId === partId) {
         selectionBox.visible = false;
         rig.selectedPartId = null;
@@ -1683,6 +1692,259 @@
         targetGroup.attach(mesh);
         mesh.userData.boneId = targetGroupId;
         mesh.userData.category = targetGroupId;
+        if (rig.selectedPartId === partId && selectionBox.visible) {
+          selectionBox.update();
+        }
+      }
+      return true;
+    };
+
+    // ==========================================
+    // REAL GROUPING & UNGROUPING SYSTEM
+    // ==========================================
+    let nextGroupId = 1;
+    const registeredGroups = new Map();
+
+    rig.createCustomGroup = function (groupName, partIds = [], targetBoneId = null) {
+      if (!partIds || partIds.length === 0) return null;
+
+      const validMeshes = [];
+      const center = new THREE.Vector3();
+      const tempP = new THREE.Vector3();
+
+      let determinedBoneId = targetBoneId;
+
+      for (const pid of partIds) {
+        const m = registeredParts.get(pid);
+        if (m && m.parent && !m.userData.isGroup) {
+          validMeshes.push(m);
+          m.getWorldPosition(tempP);
+          center.add(tempP);
+          if (!determinedBoneId) {
+            determinedBoneId = m.userData.boneId || 'head';
+          }
+        }
+      }
+
+      if (validMeshes.length === 0) return null;
+      center.divideScalar(validMeshes.length);
+      if (!determinedBoneId) determinedBoneId = 'head';
+
+      const parentBoneNode = getBoneNode(determinedBoneId);
+      const groupNode = new THREE.Group();
+
+      // Convert center to local space of bone
+      const localCenter = center.clone();
+      parentBoneNode.worldToLocal(localCenter);
+      groupNode.position.copy(localCenter);
+
+      parentBoneNode.add(groupNode);
+
+      const groupId = `custom_group_${nextGroupId++}`;
+      const name = groupName || `Grup_${nextGroupId - 1}`;
+      groupNode.name = name;
+      groupNode.userData.partId = groupId;
+      groupNode.userData.partName = name;
+      groupNode.userData.isGroup = true;
+      groupNode.userData.boneId = determinedBoneId;
+      groupNode.userData.category = determinedBoneId;
+      groupNode.userData.childIds = [];
+
+      for (const m of validMeshes) {
+        groupNode.attach(m);
+        m.userData.parentGroupId = groupId;
+        groupNode.userData.childIds.push(m.userData.partId);
+      }
+
+      registeredParts.set(groupId, groupNode);
+      registeredGroups.set(groupId, groupNode);
+
+      rig.selectObject(groupId);
+      return groupId;
+    };
+
+    rig.ungroup = function (groupId) {
+      const groupNode = registeredGroups.get(groupId) || registeredParts.get(groupId);
+      if (!groupNode || !groupNode.userData.isGroup) return false;
+
+      const boneId = groupNode.userData.boneId || 'head';
+      const targetBoneNode = getBoneNode(boneId);
+
+      // Re-attach all children back to the bone node
+      while (groupNode.children.length > 0) {
+        const child = groupNode.children[0];
+        targetBoneNode.attach(child);
+        delete child.userData.parentGroupId;
+        child.userData.boneId = boneId;
+        child.userData.category = boneId;
+      }
+
+      if (groupNode.parent) {
+        groupNode.parent.remove(groupNode);
+      }
+
+      registeredParts.delete(groupId);
+      registeredGroups.delete(groupId);
+
+      if (rig.selectedPartId === groupId) {
+        selectionBox.visible = false;
+        rig.selectedPartId = null;
+      }
+
+      return true;
+    };
+
+    rig.addPartToGroup = function (partId, groupId) {
+      const mesh = registeredParts.get(partId);
+      const groupNode = registeredGroups.get(groupId) || registeredParts.get(groupId);
+      if (!mesh || !groupNode || !groupNode.userData.isGroup) return false;
+
+      groupNode.attach(mesh);
+      mesh.userData.parentGroupId = groupId;
+      if (!groupNode.userData.childIds.includes(partId)) {
+        groupNode.userData.childIds.push(partId);
+      }
+      return true;
+    };
+
+    rig.removePartFromGroup = function (partId) {
+      const mesh = registeredParts.get(partId);
+      if (!mesh || !mesh.userData.parentGroupId) return false;
+
+      const groupId = mesh.userData.parentGroupId;
+      const groupNode = registeredParts.get(groupId);
+      const boneId = groupNode?.userData?.boneId || 'head';
+      const targetBone = getBoneNode(boneId);
+
+      targetBone.attach(mesh);
+      delete mesh.userData.parentGroupId;
+      mesh.userData.boneId = boneId;
+
+      if (groupNode && groupNode.userData.childIds) {
+        groupNode.userData.childIds = groupNode.userData.childIds.filter((id) => id !== partId);
+      }
+      return true;
+    };
+
+    // ==========================================
+    // MESH SLICING & HALF-CUT (Potong Separuh)
+    // ==========================================
+    rig.sliceObjectHalf = function (partId, axis = 'x', invert = false) {
+      const mesh = registeredParts.get(partId);
+      if (!mesh) return false;
+
+      // Ensure mesh has its own material
+      if (!mesh.userData.hasOwnMaterial && mesh.material) {
+        mesh.material = mesh.material.clone();
+        mesh.userData.hasOwnMaterial = true;
+      }
+
+      const sign = invert ? -1 : 1;
+      const normal = new THREE.Vector3(
+        axis === 'x' ? sign : 0,
+        axis === 'y' ? sign : 0,
+        axis === 'z' ? sign : 0
+      );
+
+      const plane = new THREE.Plane(normal, 0);
+      mesh.material.clippingPlanes = [plane];
+      mesh.material.clipShadows = true;
+      mesh.material.needsUpdate = true;
+
+      mesh.userData.isSliced = true;
+      mesh.userData.sliceAxis = axis;
+      mesh.userData.sliceInvert = invert;
+      mesh.userData.clippingPlane = plane;
+
+      if (rig.selectedPartId === partId && selectionBox.visible) {
+        selectionBox.update();
+      }
+      return true;
+    };
+
+    rig.restoreOriginalGeometry = function (partId) {
+      const mesh = registeredParts.get(partId);
+      if (!mesh) return false;
+
+      if (mesh.userData.originalGeometry && mesh.geometry) {
+        mesh.geometry.dispose();
+        mesh.geometry = mesh.userData.originalGeometry.clone();
+        mesh.geometry.computeVertexNormals();
+      }
+
+      if (mesh.material) {
+        mesh.material.clippingPlanes = [];
+        mesh.material.needsUpdate = true;
+      }
+
+      mesh.userData.isSliced = false;
+      mesh.userData.isSculpted = false;
+      delete mesh.userData.sliceAxis;
+      delete mesh.userData.sliceInvert;
+      delete mesh.userData.clippingPlane;
+
+      if (rig.selectedPartId === partId && selectionBox.visible) {
+        selectionBox.update();
+      }
+      return true;
+    };
+
+    // ==========================================
+    // FREEFORM VERTEX SCULPTING (Bentuk Leluasa)
+    // ==========================================
+    rig.sculptObjectVertex = function (partId, hitPointLocal, hitNormalLocal, brushType = 'pull', radius = 0.35, strength = 0.15) {
+      const mesh = registeredParts.get(partId);
+      if (!mesh || !mesh.geometry) return false;
+
+      const posAttr = mesh.geometry.attributes.position;
+      if (!posAttr) return false;
+
+      if (!mesh.userData.originalGeometry) {
+        mesh.userData.originalGeometry = mesh.geometry.clone();
+      }
+
+      if (!mesh.userData.isSculpted) {
+        mesh.geometry = mesh.geometry.clone();
+        mesh.userData.isSculpted = true;
+      }
+
+      const pAttr = mesh.geometry.attributes.position;
+      const hx = hitPointLocal.x;
+      const hy = hitPointLocal.y;
+      const hz = hitPointLocal.z;
+
+      const nx = hitNormalLocal ? hitNormalLocal.x : 0;
+      const ny = hitNormalLocal ? hitNormalLocal.y : 1;
+      const nz = hitNormalLocal ? hitNormalLocal.z : 0;
+
+      let modified = 0;
+      for (let i = 0; i < pAttr.count; i++) {
+        const vx = pAttr.getX(i);
+        const vy = pAttr.getY(i);
+        const vz = pAttr.getZ(i);
+
+        const dx = vx - hx;
+        const dy = vy - hy;
+        const dz = vz - hz;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (dist < radius) {
+          const factor = Math.cos((dist / radius) * (Math.PI * 0.5)) * strength;
+
+          if (brushType === 'pull') {
+            pAttr.setXYZ(i, vx + nx * factor, vy + ny * factor, vz + nz * factor);
+          } else if (brushType === 'push') {
+            pAttr.setXYZ(i, vx - nx * factor, vy - ny * factor, vz - nz * factor);
+          } else if (brushType === 'smooth') {
+            pAttr.setXYZ(i, vx + (hx - vx) * factor * 0.4, vy + (hy - vy) * factor * 0.4, vz + (hz - vz) * factor * 0.4);
+          }
+          modified++;
+        }
+      }
+
+      if (modified > 0) {
+        pAttr.needsUpdate = true;
+        mesh.geometry.computeVertexNormals();
         if (rig.selectedPartId === partId && selectionBox.visible) {
           selectionBox.update();
         }

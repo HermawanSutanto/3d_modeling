@@ -1559,3 +1559,70 @@ input:checked + .slider-switch:before {
   color: #ffffff;
 }
 
+/* --- GROUP, SLICE & SCULPT STYLING --- */
+.slice-btn, .sculpt-type-btn {
+  padding: 8px 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+}
+
+.slice-btn:hover, .sculpt-type-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.slice-btn.active, .sculpt-type-btn.active {
+  border: 2px solid var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.tree-item-checkbox {
+  margin-right: 6px;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
+.tree-subgroup-box {
+  background: rgba(2, 132, 199, 0.04);
+  border: 1px dashed rgba(2, 132, 199, 0.35);
+  border-radius: 6px;
+  margin: 4px 0 6px 12px;
+  padding: 4px 6px;
+}
+
+.tree-subgroup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tree-subgroup-header:hover {
+  background: #bae6fd;
+}
+
+.tree-subgroup-header.selected {
+  outline: 2px solid #0284c7;
+}
+
+.tree-subgroup-children {
+  padding-left: 8px;
+  margin-top: 4px;
+}
+

@@ -638,7 +638,189 @@ async function runTests() {
   await page.screenshot({ path: faceScreenshotPath });
   console.log(`📸 Screenshot Face & Blink Editor tersimpan: ${faceScreenshotPath}`);
 
-  // 17. Uji Ekspor Proyek JSON
+  // 17. Uji Sistem Pengelompokan Sejati (True Group & Ungroup)
+  console.log('🔗 Menguji Sistem Pengelompokan Sejati (Real Grouping & Ungrouping)...');
+  await page.click('.editor-tab-btn[data-tab="tree"]');
+  await page.waitForTimeout(200);
+
+  // Buat 2 part kustom untuk digabung
+  const newPartIds = await page.evaluate(() => {
+    const p1 = window.appRig.addPrimitivePart({
+      type: 'box',
+      name: 'Kotak_Group_A',
+      parentGroupId: 'head',
+      position: { x: 0.2, y: 1.8, z: 0.1 }
+    });
+    const p2 = window.appRig.addPrimitivePart({
+      type: 'sphere',
+      name: 'Bola_Group_B',
+      parentGroupId: 'head',
+      position: { x: -0.2, y: 1.8, z: 0.1 }
+    });
+    return [p1, p2];
+  });
+  console.log('✓ 2 Part Kustom untuk Pengujian Dibuat:', newPartIds);
+
+  // Gabungkan kedua part menjadi Grup Komposit
+  const groupCreationResult = await page.evaluate((ids) => {
+    const groupId = window.appRig.createCustomGroup('Grup_Uji_Playwright', ids);
+    const groupMesh = window.appRig.registeredParts.get(groupId);
+    const m1 = window.appRig.registeredParts.get(ids[0]);
+    const m2 = window.appRig.registeredParts.get(ids[1]);
+    return {
+      groupId,
+      isGroupValid: !!groupMesh && groupMesh.userData.isGroup === true,
+      m1ParentGroupId: m1.userData.parentGroupId,
+      m2ParentGroupId: m2.userData.parentGroupId,
+      childCount: groupMesh.userData.childIds.length
+    };
+  }, newPartIds);
+
+  console.log('✓ Hasil Pembuatan Grup Komposit:', groupCreationResult);
+  if (!groupCreationResult.isGroupValid || groupCreationResult.childCount !== 2) {
+    throw new Error('Pembuatan grup komposit gagal!');
+  }
+
+  // Uji Transformasi Bersama: Gerakkan grup dan periksa bahwa kedua anak bergerak bersama
+  const groupTransformResult = await page.evaluate((gId) => {
+    const gMesh = window.appRig.registeredParts.get(gId);
+    const c1 = gMesh.children[0];
+    const initialChildWorldY = new window.THREE.Vector3();
+    c1.getWorldPosition(initialChildWorldY);
+
+    // Geser grup ke atas sebanyak +0.5
+    window.appRig.updateObjectTransform(gId, { position: { y: gMesh.position.y + 0.5 } });
+
+    const movedChildWorldY = new window.THREE.Vector3();
+    c1.getWorldPosition(movedChildWorldY);
+
+    return {
+      deltaY: +(movedChildWorldY.y - initialChildWorldY.y).toFixed(3)
+    };
+  }, groupCreationResult.groupId);
+
+  console.log('✓ Uji Transformasi Bersama Grup (Delta Y):', groupTransformResult);
+  if (Math.abs(groupTransformResult.deltaY - 0.5) > 0.05) {
+    throw new Error('Transformasi grup tidak menggerakkan anak secara serempak!');
+  }
+
+  // Refresh outliner dan verifikasi group node ter-render
+  await page.evaluate(() => window.CharacterEditor.refreshTree());
+  await page.waitForTimeout(200);
+
+  const groupNodeRendered = await page.evaluate((gId) => {
+    const el = document.querySelector(`.tree-subgroup-box[data-group-id="${gId}"]`);
+    return !!el;
+  }, groupCreationResult.groupId);
+  console.log(`✓ Node Grup Ter-render di Outliner Tree: ${groupNodeRendered ? 'PASS' : 'FAIL'}`);
+
+  // Ambil screenshot Tree Outliner dengan grup komposit
+  const groupScreenshotPath = path.resolve(__dirname, 'screenshot_grouping_hierarchy.png');
+  await page.screenshot({ path: groupScreenshotPath });
+  console.log(`📸 Screenshot Outliner Hierarchy dengan Grup tersimpan: ${groupScreenshotPath}`);
+
+  // Uji Ungroup (Pisahkan Grup Kembali)
+  console.log('✂️ Menguji Pemisahan Grup (Ungrouping)...');
+  const ungroupResult = await page.evaluate(({ gId, p1Id }) => {
+    const success = window.appRig.ungroup(gId);
+    const groupStillExists = window.appRig.registeredParts.has(gId);
+    const m1 = window.appRig.registeredParts.get(p1Id);
+    return {
+      success,
+      groupStillExists,
+      m1ParentGroupCleared: !m1.userData.parentGroupId
+    };
+  }, { gId: groupCreationResult.groupId, p1Id: newPartIds[0] });
+
+  console.log('✓ Hasil Ungroup:', ungroupResult);
+  if (!ungroupResult.success || ungroupResult.groupStillExists || !ungroupResult.m1ParentGroupCleared) {
+    throw new Error('Pemisahan grup (ungroup) gagal!');
+  }
+
+  // 18. Uji Pemotongan Separuh (Half-Cut / Slice)
+  console.log('✂️ Menguji Pemotongan Separuh (Half-Cut / Slicing)...');
+  const sliceTestResult = await page.evaluate((pid) => {
+    // Potong separuh sumbu X
+    window.appRig.sliceObjectHalf(pid, 'x', false);
+    const mesh = window.appRig.registeredParts.get(pid);
+    const isSliced = mesh.userData.isSliced === true;
+    const hasPlane = mesh.material.clippingPlanes && mesh.material.clippingPlanes.length === 1;
+    const planeNormalX = hasPlane ? mesh.material.clippingPlanes[0].normal.x : 0;
+
+    // Balik sisi potongan
+    window.appRig.sliceObjectHalf(pid, 'x', true);
+    const invertedNormalX = mesh.material.clippingPlanes[0].normal.x;
+
+    // Pulihkan bentuk utuh
+    window.appRig.restoreOriginalGeometry(pid);
+    const restoredPlanes = mesh.material.clippingPlanes?.length || 0;
+    const restoredIsSliced = mesh.userData.isSliced;
+
+    return {
+      isSliced,
+      hasPlane,
+      planeNormalX,
+      invertedNormalX,
+      restoredPlanes,
+      restoredIsSliced
+    };
+  }, newPartIds[0]);
+
+  console.log('✓ Hasil Pengujian Half-Cut Slicing:', sliceTestResult);
+  if (!sliceTestResult.isSliced || !sliceTestResult.hasPlane || sliceTestResult.planeNormalX !== 1 || sliceTestResult.invertedNormalX !== -1 || sliceTestResult.restoredPlanes !== 0) {
+    throw new Error('Fitur potong separuh (Half-Cut) gagal!');
+  }
+
+  // 19. Uji Membentuk Leluasa / Pahat (Vertex Sculpting Brush)
+  console.log('🖌️ Menguji Membentuk Leluasa (Freeform Vertex Sculpting)...');
+  const sculptTestResult = await page.evaluate((pid) => {
+    const mesh = window.appRig.registeredParts.get(pid);
+    const origY = mesh.geometry.attributes.position.getY(0);
+
+    // Lakukan deformasi sculpt 'pull' ke arah atas
+    const hitPoint = new window.THREE.Vector3(0, 0, 0);
+    const hitNormal = new window.THREE.Vector3(0, 1, 0);
+    window.appRig.sculptObjectVertex(pid, hitPoint, hitNormal, 'pull', 0.5, 0.25);
+
+    const newY = mesh.geometry.attributes.position.getY(0);
+    const isSculpted = mesh.userData.isSculpted === true;
+    const deltaY = +(newY - origY).toFixed(4);
+
+    // Reset sculpt
+    window.appRig.restoreOriginalGeometry(pid);
+    const resetY = mesh.geometry.attributes.position.getY(0);
+
+    return {
+      origY,
+      newY,
+      deltaY,
+      isSculpted,
+      isResetValid: Math.abs(resetY - origY) < 0.0001
+    };
+  }, newPartIds[0]);
+
+  console.log('✓ Hasil Pengujian Vertex Sculpting Brush:', sculptTestResult);
+  if (!sculptTestResult.isSculpted || sculptTestResult.deltaY <= 0 || !sculptTestResult.isResetValid) {
+    throw new Error('Fitur memahat bebas (sculpting brush) gagal!');
+  }
+
+  // Buka inspector untuk part kustom dan ambil screenshot tampilan tools
+  await page.evaluate((pid) => {
+    window.CharacterEditor.selectPart(pid);
+  }, newPartIds[0]);
+  await page.click('.editor-tab-btn[data-tab="inspector"]');
+  await page.waitForTimeout(200);
+
+  const toolsScreenshotPath = path.resolve(__dirname, 'screenshot_slice_sculpt_inspector.png');
+  await page.screenshot({ path: toolsScreenshotPath });
+  console.log(`📸 Screenshot Slice & Sculpt Inspector tersimpan: ${toolsScreenshotPath}`);
+
+  // Bersihkan part uji
+  await page.evaluate((ids) => {
+    ids.forEach((id) => window.appRig.deleteObject(id));
+  }, newPartIds);
+
+  // 20. Uji Ekspor Proyek JSON
   console.log('📦 Menguji Integritas Proyek & Konfigurasi JSON...');
   await page.click('.editor-tab-btn[data-tab="presets"]');
   await page.waitForTimeout(300);

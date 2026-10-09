@@ -122,7 +122,16 @@
       <div class="editor-tab-panel active" id="tab-tree">
         <div class="tree-panel-header">
           <div class="editor-section-header">Pohon Objek Karakter</div>
-          <button class="btn-sm-primary" id="btn-tree-add-part">➕ Tambah Part</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-sm-secondary" id="btn-tree-group-mode" title="Pilih beberapa objek untuk digabung">☑️ Mode Grup</button>
+            <button class="btn-sm-primary" id="btn-tree-add-part">➕ Tambah Part</button>
+          </div>
+        </div>
+        <div id="tree-group-action-bar" style="display:none; background:#e0f2fe; border:1px solid #7dd3fc; border-radius:6px; padding:6px 10px; margin-bottom:8px; justify-content:space-between; align-items:center; gap:6px;">
+          <span style="font-size:12px; font-weight:600; color:#0369a1; white-space:nowrap;"><span id="tree-selected-count">0</span> dipilih</span>
+          <input type="text" id="input-group-name" class="text-input-field" style="height:26px; font-size:11px; padding:2px 8px; flex:1;" placeholder="Nama Grup..." value="Grup_Komposit">
+          <button class="btn-sm-primary" id="btn-confirm-create-group" style="white-space:nowrap;">📁 Gabung</button>
+          <button class="btn-sm-secondary" id="btn-cancel-create-group" style="white-space:nowrap;">Batal</button>
         </div>
         <div class="tree-hint-text">Klik objek untuk memilih & mengedit di Inspector. 👁️ untuk tampilkan/sembunyikan.</div>
         <div class="outliner-tree-container" id="outliner-tree-container">
@@ -270,7 +279,73 @@
             </div>
           </div>
 
-          <button class="btn-reset-secondary" id="btn-insp-reset-tf">
+          <!-- Panel Info & Pisahkan Grup (Muncul saat Group dipilih) -->
+          <div id="insp-group-section" style="display:none; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.25); border-radius:8px; padding:12px; margin-top:14px;">
+            <div style="font-size:12px; font-weight:700; color:#0284c7; margin-bottom:6px;">📁 Grup Objek Komposit</div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">Semua objek di dalam grup ini bergerak, berputar, dan membesar bersamaan sebagai satu kesatuan.</div>
+            <div id="insp-group-children-list" style="font-size:11px; margin-bottom:10px; color:#334155;"></div>
+            <button class="action-btn-primary" id="btn-insp-ungroup" style="width:100%; background:#e11d48;">
+              <span>📂</span> Pisahkan Grup Menjadi Part Individual (Ungroup)
+            </button>
+          </div>
+
+          <!-- Potong Menjadi Separuh (Half-Cut / Slice) -->
+          <div class="transform-section" id="insp-slice-section">
+            <div class="section-title-sm">✂️ Potong Menjadi Separuh (Half-Cut / Slice)</div>
+            <div class="tree-hint-text" style="margin-bottom:8px;">Belah objek menjadi separuh (setengah bola/tabung/kotak) di sepanjang sumbu koordinat.</div>
+            <div class="button-toggle-grid" style="grid-template-columns:1fr 1fr 1fr;">
+              <button class="slice-btn" data-slice-axis="x">🌓 Belah X</button>
+              <button class="slice-btn" data-slice-axis="y">🌔 Belah Y</button>
+              <button class="slice-btn" data-slice-axis="z">🌕 Belah Z</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+              <button class="btn-sm-secondary" id="btn-slice-invert" style="flex:1;">🔄 Balik Sisi Potong</button>
+              <button class="btn-sm-secondary" id="btn-slice-reset" style="flex:1;">⟲ Pulihkan Utuh</button>
+            </div>
+          </div>
+
+          <!-- Bentuk Leluasa (Sculpt & Deform Brush) -->
+          <div class="transform-section" id="insp-sculpt-section">
+            <div class="section-title-header">
+              <span class="section-title-sm">🖐️ Bentuk Leluasa (Sculpt Brush)</span>
+              <span class="badge-tag-sm" id="badge-sculpt-status" style="background:#64748b; color:#fff;">NONAKTIF</span>
+            </div>
+            <div class="tree-hint-text" style="margin-bottom:8px;">Klik & tarik kursor langsung pada objek 3D di kanvas untuk membentuk atau menarik permukaan secara bebas.</div>
+            
+            <button class="action-btn-primary" id="btn-toggle-sculpt-mode" style="width:100%; margin-bottom:10px;">
+              <span>🖌️</span> <span id="text-toggle-sculpt">Mulai Memahat (Sculpt Mode)</span>
+            </button>
+
+            <div id="sculpt-controls-body" style="display:none;">
+              <div class="button-toggle-grid" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:10px;">
+                <button class="sculpt-type-btn active" data-brush="pull">⬆️ Tarik</button>
+                <button class="sculpt-type-btn" data-brush="push">⬇️ Tekan</button>
+                <button class="sculpt-type-btn" data-brush="smooth">〰️ Halus</button>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="slider-sculpt-radius">Ukuran Kuas (Brush Radius)</label>
+                  <span class="slider-val" id="val-sculpt-radius">0.35</span>
+                </div>
+                <input type="range" id="slider-sculpt-radius" min="0.10" max="0.80" step="0.02" value="0.35">
+              </div>
+
+              <div class="slider-group" style="margin-top:8px;">
+                <div class="slider-header">
+                  <label for="slider-sculpt-strength">Kekuatan Bentuk (Strength)</label>
+                  <span class="slider-val" id="val-sculpt-strength">0.15</span>
+                </div>
+                <input type="range" id="slider-sculpt-strength" min="0.02" max="0.40" step="0.01" value="0.15">
+              </div>
+
+              <button class="btn-sm-secondary" id="btn-sculpt-reset" style="width:100%; margin-top:8px;">
+                <span>⟲</span> Reset Bentuk ke Asli
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-reset-secondary" id="btn-insp-reset-tf" style="margin-top:14px;">
             <span>⟲</span> Reset Transformasi Lokal
           </button>
         </div>
