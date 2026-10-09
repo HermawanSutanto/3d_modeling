@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stylized 3D Game Character — Master Model V1 (Three.js)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- WebGL 3D Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Header Bar -->
+  <header class="header-bar">
+    <div class="brand-card">
+      <div class="brand-title">
+        <span>Karakter 3D Villager</span>
+        <span class="badge-tag">No. 1 Shirt</span>
+      </div>
+      <div class="brand-subtitle">Master Model V1 — Stylized Life-Simulation Game Aesthetic</div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn-pill accent" id="btn-editor" title="Buka Editor Kustom Karakter">
+        <span>🎨</span> Editor
+      </button>
+      <button class="btn-pill" id="btn-screenshot" title="Ambil Gambar PNG">
+        <span>📸</span> Screenshot
+      </button>
+      <button class="btn-pill primary" id="btn-spec" title="Lihat Spesifikasi Model">
+        <span>📋</span> Spesifikasi
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Floating Control Dock -->
+  <div class="controls-dock">
+    <div class="dock-card">
+      <!-- Camera View Presets -->
+      <button class="control-btn active" data-view="perspective">🎥 3/4 Sudut</button>
+      <button class="control-btn" data-view="front">👤 Depan</button>
+      <button class="control-btn" data-view="side">🔄 Samping</button>
+      <button class="control-btn" data-view="back">🔙 Belakang</button>
+      <button class="control-btn" data-view="face">🔍 Wajah</button>
+
+      <div class="divider"></div>
+
+      <!-- Animation / Motion Toggle -->
+      <button class="control-btn active" id="btn-anim">
+        <span>⏸️</span> Animasi Diam
+      </button>
+
+      <!-- Auto Rotate Toggle -->
+      <button class="control-btn" id="btn-rotate">
+        <span>🔄</span> Putar Otomatis
+      </button>
+
+      <!-- Wireframe Mode Toggle -->
+      <button class="control-btn" id="btn-wireframe">
+        <span>🌐</span> Wireframe
+      </button>
+
+      <!-- Skeleton Mode Toggle -->
+      <button class="control-btn" id="btn-skeleton" title="Tampilkan Sendi & Skeleton">
+        <span>🦴</span> Skeleton
+      </button>
+
+      <!-- Facial Markers Toggle -->
+      <button class="control-btn" id="btn-facial-markers" title="Tampilkan Tanda Mata & Mulut di Kepala">
+        <span>🏷️</span> Tanda Wajah
+      </button>
+
+      <div class="divider"></div>
+
+      <!-- Lighting Presets -->
+      <button class="control-btn active" data-lighting="studio">💡 Studio</button>
+      <button class="control-btn" data-lighting="warm">🌅 Hangat</button>
+      <button class="control-btn" data-lighting="island">🏝️ Pulau</button>
+
+      <div class="divider"></div>
+
+      <!-- Reset View -->
+      <button class="control-btn" id="btn-reset" title="Reset Kamera">
+        <span>⟲</span> Reset
+      </button>
+    </div>
+
+    <!-- Mouse / Touch Navigation Hint -->
+    <div class="gesture-hint">
+      <span>🖱️ Klik Kiri: Putar Kamera</span>
+      <span>•</span>
+      <span>🖱️ Klik Kanan: Geser (Pan)</span>
+      <span>•</span>
+      <span>📜 Scroll: Zoom In/Out</span>
+    </div>
+  </div>
+
+  <!-- Interactive Character Customizer Drawer (Slides from Left) -->
+  <aside class="editor-drawer" id="editor-drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <span>🎨 Editor Karakter</span>
+        <span class="editor-subbadge">Real-Time</span>
+      </div>
+      <button class="close-btn" id="btn-close-editor" title="Tutup Editor">✕</button>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="editor-tabs-nav">
+      <button class="editor-tab-btn active" data-tab="tree" title="Pohon Hierarki Objek">🌳 Hierarki</button>
+      <button class="editor-tab-btn" data-tab="inspector" title="Edit Objek Terpilih">🎛️ Inspector</button>
+      <button class="editor-tab-btn" data-tab="face" title="Kontrol Mata, Kedip & Mulut">🎭 Wajah & Kedip</button>
+      <button class="editor-tab-btn" data-tab="addpart" title="Tambah Objek Primitif">➕ Part</button>
+      <button class="editor-tab-btn" data-tab="colors" title="Warna & Bahan">🎨 Warna</button>
+      <button class="editor-tab-btn" data-tab="motion" title="Animasi & Pose Sendi">💃 Gerak & Pose</button>
+      <button class="editor-tab-btn" data-tab="presets" title="Preset & Ekspor 3D">📦 Ekspor</button>
+    </div>
+
+    <div class="editor-content">
+      <!-- TAB: HIERARKI POHON (OUTLINER) -->
+      <div class="editor-tab-panel active" id="tab-tree">
+        <div class="tree-panel-header">
+          <div class="editor-section-header">Pohon Objek Karakter</div>
+          <button class="btn-sm-primary" id="btn-tree-add-part">➕ Tambah Part</button>
+        </div>
+        <div class="tree-hint-text">Klik objek untuk memilih & mengedit di Inspector. 👁️ untuk tampilkan/sembunyikan.</div>
+        <div class="outliner-tree-container" id="outliner-tree-container">
+          <!-- Rendered dynamically by editor.js -->
+        </div>
+      </div>
+
+      <!-- TAB: INSPECTOR OBJEK TERPILIH -->
+      <div class="editor-tab-panel" id="tab-inspector">
+        <div id="inspector-empty-state" class="inspector-empty">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-title">Belum Ada Objek Dipilih</div>
+          <div class="empty-desc">Pilih objek dari tab <strong>Hierarki</strong> atau klik langsung bagian model di kanvas 3D untuk mengedit posisi, rotasi, ukuran, dan warnanya.</div>
+        </div>
+
+        <div id="inspector-content-state" class="inspector-content" style="display:none;">
+          <!-- Header Info Objek -->
+          <div class="insp-header-card">
+            <div class="insp-header-top">
+              <span class="badge-tag-sm" id="insp-part-type">CONE</span>
+              <div class="insp-quick-btns">
+                <button class="icon-btn-action" id="btn-insp-duplicate" title="Duplikat Objek">📋</button>
+                <button class="icon-btn-action" id="btn-insp-mirror" title="Cermin Simetris (-X)">🪞</button>
+                <button class="icon-btn-action danger" id="btn-insp-delete" title="Hapus Objek">🗑️</button>
+              </div>
+            </div>
+            <div class="control-row-flush">
+              <label class="control-title" for="insp-part-name">Nama Objek</label>
+              <input type="text" id="insp-part-name" class="text-input-field left-align" value="">
+            </div>
+            <div class="control-row-flush" style="margin-top:8px;">
+              <label class="control-title" for="insp-part-parent">Tulang Rigging Induk (Parent Bone)</label>
+              <select id="insp-part-parent" class="select-field">
+                <option value="head">🦴 Kepala & Wajah (Head Bone)</option>
+                <option value="torso">🦴 Badan & Baju (Torso Bone)</option>
+                <option value="pelvis">🦴 Panggul & Pinggang (Pelvis Bone)</option>
+                <option value="arm_upper_l">🦴 Lengan Atas Kiri (Left Upper Arm)</option>
+                <option value="arm_lower_l">🦴 Siku & Tangan Kiri (Left Forearm & Hand)</option>
+                <option value="arm_upper_r">🦴 Lengan Atas Kanan (Right Upper Arm)</option>
+                <option value="arm_lower_r">🦴 Siku & Tangan Kanan (Right Forearm & Hand)</option>
+                <option value="leg_upper_l">🦴 Paha Kiri & Cuff (Left Thigh Bone)</option>
+                <option value="leg_lower_l">🦴 Lutut & Kaki Kiri (Left Knee Bone)</option>
+                <option value="leg_upper_r">🦴 Paha Kanan & Cuff (Right Thigh Bone)</option>
+                <option value="leg_lower_r">🦴 Lutut & Kaki Kanan (Right Knee Bone)</option>
+              </select>
+            </div>
+            <div class="control-row-flush" style="margin-top:8px;">
+              <label class="control-title" for="insp-facial-role">🎭 Peran Fitur Wajah (Facial Role Switch)</label>
+              <select id="insp-facial-role" class="select-field">
+                <option value="none">⚪ Biasa (Bukan Fitur Wajah)</option>
+                <option value="eye_left">👁️ Mata Kiri (Left Eye)</option>
+                <option value="eye_right">👁️ Mata Kanan (Right Eye)</option>
+                <option value="mouth">👄 Mulut (Mouth Feature)</option>
+                <option value="nose">👃 Hidung (Nose Feature)</option>
+                <option value="eyebrow_left">🤨 Alis Kiri (Left Eyebrow)</option>
+                <option value="eyebrow_right">🤨 Alis Kanan (Right Eyebrow)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Posisi X, Y, Z -->
+          <div class="transform-section">
+            <div class="section-title-sm">📐 Posisi (Position)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">X</span>
+              <input type="range" id="slider-pos-x" min="-3.0" max="3.0" step="0.01" value="0">
+              <input type="number" id="num-pos-x" class="axis-num-input" step="0.01" value="0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Y</span>
+              <input type="range" id="slider-pos-y" min="-3.0" max="8.0" step="0.01" value="0">
+              <input type="number" id="num-pos-y" class="axis-num-input" step="0.01" value="0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">Z</span>
+              <input type="range" id="slider-pos-z" min="-3.0" max="3.0" step="0.01" value="0">
+              <input type="number" id="num-pos-z" class="axis-num-input" step="0.01" value="0">
+            </div>
+          </div>
+
+          <!-- Rotasi X, Y, Z -->
+          <div class="transform-section">
+            <div class="section-title-sm">🔄 Rotasi Derajat (Rotation °)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">X°</span>
+              <input type="range" id="slider-rot-x" min="-180" max="180" step="1" value="0">
+              <input type="number" id="num-rot-x" class="axis-num-input" step="1" value="0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Y°</span>
+              <input type="range" id="slider-rot-y" min="-180" max="180" step="1" value="0">
+              <input type="number" id="num-rot-y" class="axis-num-input" step="1" value="0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">Z°</span>
+              <input type="range" id="slider-rot-z" min="-180" max="180" step="1" value="0">
+              <input type="number" id="num-rot-z" class="axis-num-input" step="1" value="0">
+            </div>
+          </div>
+
+          <!-- Skala X, Y, Z -->
+          <div class="transform-section">
+            <div class="section-title-header">
+              <span class="section-title-sm">📏 Skala Ukuran (Scale)</span>
+              <label class="toggle-inline">
+                <input type="checkbox" id="toggle-uniform-scale" checked>
+                <span>🔒 Seragam</span>
+              </label>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">SX</span>
+              <input type="range" id="slider-scl-x" min="0.1" max="3.0" step="0.01" value="1.0">
+              <input type="number" id="num-scl-x" class="axis-num-input" step="0.01" value="1.0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">SY</span>
+              <input type="range" id="slider-scl-y" min="0.1" max="3.0" step="0.01" value="1.0">
+              <input type="number" id="num-scl-y" class="axis-num-input" step="0.01" value="1.0">
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">SZ</span>
+              <input type="range" id="slider-scl-z" min="0.1" max="3.0" step="0.01" value="1.0">
+              <input type="number" id="num-scl-z" class="axis-num-input" step="0.01" value="1.0">
+            </div>
+          </div>
+
+          <!-- Material & Warna Objek -->
+          <div class="transform-section">
+            <div class="section-title-sm">🎨 Warna & Kilap Objek</div>
+            <div class="control-row">
+              <div class="control-label-group">
+                <label class="control-title" for="insp-part-color">Warna Objek</label>
+                <span class="hex-badge" id="insp-hex-color">#1E0F08</span>
+              </div>
+              <div class="color-picker-wrapper">
+                <input type="color" id="insp-part-color" value="#1e0f08">
+              </div>
+            </div>
+            <div class="slider-group" style="margin-top:8px;">
+              <div class="slider-header">
+                <label for="insp-part-rough">Kekasaran / Matte (Roughness)</label>
+                <span class="slider-val" id="insp-val-rough">0.65</span>
+              </div>
+              <input type="range" id="insp-part-rough" min="0.0" max="1.0" step="0.01" value="0.65">
+            </div>
+          </div>
+
+          <button class="btn-reset-secondary" id="btn-insp-reset-tf">
+            <span>⟲</span> Reset Transformasi Lokal
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB: KONTROL WAJAH & KEDIP -->
+      <div class="editor-tab-panel" id="tab-face">
+        <!-- 1. TANDA FITUR WAJAH DI KEPALA -->
+        <div class="editor-section-header">🏷️ Tanda Fitur Wajah di Kepala</div>
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <span class="control-title">Pin / Tanda 3D di Kepala</span>
+            <span class="toggle-sub">Tampilkan penanda visual melayang pada posisi mata & mulut</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-facial-markers-switch">
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+
+        <div class="facial-role-status-card" style="margin-top:10px; background:rgba(15,23,42,0.6); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
+          <div style="font-size:11px; color:#94a3b8; margin-bottom:6px; font-weight:600; text-transform:uppercase;">Status Objek Fitur Wajah Aktif:</div>
+          <div style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span>👁️ Mata Kiri:</span>
+              <span id="status-role-eyel" class="badge-tag-sm" style="background:#0284c7; color:#fff;">eye_left</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span>👁️ Mata Kanan:</span>
+              <span id="status-role-eyer" class="badge-tag-sm" style="background:#0284c7; color:#fff;">eye_right</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span>👄 Mulut:</span>
+              <span id="status-role-mouth" class="badge-tag-sm" style="background:#e11d48; color:#fff;">mouth_smile</span>
+            </div>
+          </div>
+          <div class="tree-hint-text" style="margin-top:8px;">💡 Pilih objek di tab <strong>Hierarki</strong> lalu gunakan <strong>Peran Fitur Wajah (Facial Role Switch)</strong> di Inspector untuk mengubah bagian mata / mulut.</div>
+        </div>
+
+        <!-- 2. KONTROL MATA & ANIMASI KEDIP -->
+        <div class="editor-section-header" style="margin-top:20px;">👁️ Kontrol Mata & Animasi Kedip</div>
+        
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <span class="control-title">Kedip Otomatis (Auto-Blink)</span>
+            <span class="toggle-sub">Animasi kelopak mata berkedip alami secara periodik</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-auto-blink" checked>
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+
+        <div class="slider-group" style="margin-top:10px;">
+          <div class="slider-header">
+            <label for="slider-blink-interval">Jeda Antar Kedipan</label>
+            <span class="slider-val" id="val-blink-interval">3.8s</span>
+          </div>
+          <input type="range" id="slider-blink-interval" min="1.0" max="8.0" step="0.2" value="3.8">
+          <div class="slider-hints"><span>Sering (1s)</span><span>Normal (3.8s)</span><span>Jarang (8s)</span></div>
+        </div>
+
+        <div class="slider-group" style="margin-top:12px;">
+          <div class="slider-header">
+            <label for="slider-manual-blink">Kedipan Manual / Pejam (Squint Slider)</label>
+            <span class="slider-val" id="val-manual-blink">0%</span>
+          </div>
+          <input type="range" id="slider-manual-blink" min="0" max="100" step="1" value="0">
+          <div class="slider-hints"><span>Terbuka (0%)</span><span>Menyipit</span><span>Pejam Rapat (100%)</span></div>
+        </div>
+
+        <div class="quick-action-grid" style="margin-top:10px;">
+          <button class="action-btn-primary" id="btn-trigger-blink" style="width:100%;">
+            <span>👁️</span> Kedipkan Mata Sekarang (1×)
+          </button>
+        </div>
+
+        <div class="control-title" style="margin-top:14px; font-size:12px;">Gaya & Mode Kedipan:</div>
+        <div class="button-toggle-grid" style="margin-top:6px;">
+          <button class="blink-mode-btn active" data-blink-mode="both">👀 Dua Mata</button>
+          <button class="blink-mode-btn" data-blink-mode="right">😉 Kedip Kanan</button>
+          <button class="blink-mode-btn" data-blink-mode="left">😉 Kedip Kiri</button>
+          <button class="blink-mode-btn" data-blink-mode="closed">😴 Pejam Tidur</button>
+        </div>
+
+        <!-- 3. KONTROL KONDISI & BENTUK MULUT -->
+        <div class="editor-section-header" style="margin-top:22px;">👄 Kondisi & Bentuk Mulut</div>
+        
+        <div class="control-title" style="font-size:12px;">Preset Kondisi Mulut:</div>
+        <div class="button-toggle-grid" style="margin-top:6px;">
+          <button class="mouth-cond-btn active" data-mouth-cond="smile">😊 Senyum</button>
+          <button class="mouth-cond-btn" data-mouth-cond="laugh">😄 Tertawa</button>
+          <button class="mouth-cond-btn" data-mouth-cond="neutral">😐 Netral</button>
+          <button class="mouth-cond-btn" data-mouth-cond="surprised">😲 Kaget</button>
+          <button class="mouth-cond-btn" data-mouth-cond="sad">🙁 Cemberut</button>
+        </div>
+
+        <div class="slider-group" style="margin-top:14px;">
+          <div class="slider-header">
+            <label for="slider-mouth-open">Keterbukaan Mulut / Rahang (Mouth Open)</label>
+            <span class="slider-val" id="val-mouth-open">0.00</span>
+          </div>
+          <input type="range" id="slider-mouth-open" min="0.0" max="1.5" step="0.05" value="0.0">
+          <div class="slider-hints"><span>Rapat (0.0)</span><span>Terbuka Sedang</span><span>Menganga Lebar</span></div>
+        </div>
+
+        <div class="slider-group" style="margin-top:12px;">
+          <div class="slider-header">
+            <label for="slider-mouth-width">Lebar Mulut (Width)</label>
+            <span class="slider-val" id="val-mouth-width">1.00×</span>
+          </div>
+          <input type="range" id="slider-mouth-width" min="0.5" max="2.0" step="0.05" value="1.0">
+          <div class="slider-hints"><span>Mungil (0.5×)</span><span>Normal (1.0×)</span><span>Lebar (2.0×)</span></div>
+        </div>
+
+        <div class="slider-group" style="margin-top:12px;">
+          <div class="slider-header">
+            <label for="slider-mouth-curve">Kelengkungan Senyum / Cemberut</label>
+            <span class="slider-val" id="val-mouth-curve">+0.50</span>
+          </div>
+          <input type="range" id="slider-mouth-curve" min="-1.0" max="1.0" step="0.05" value="0.5">
+          <div class="slider-hints"><span>Cemberut (-1.0)</span><span>Datar (0.0)</span><span>Senyum (+1.0)</span></div>
+        </div>
+
+        <div class="toggle-row" style="margin-top:14px;">
+          <div class="toggle-label-wrap">
+            <span class="control-title">Bicara Otomatis (Auto-Talk Lip Sync)</span>
+            <span class="toggle-sub">Animasi mulut membuka-menutup bergerak seolah sedang berbicara</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-auto-talk">
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- TAB: TAMBAH PART BARU -->
+      <div class="editor-tab-panel" id="tab-addpart">
+        <div class="editor-section-header">Pilih Bentuk Objek Primitif</div>
+        <div class="shape-choices-grid">
+          <button class="shape-choice-btn active" data-shape="cone">
+            <span class="shape-icon">🔺</span>
+            <span class="shape-name">Kerucut / Cone</span>
+            <span class="shape-sub">Spike/Segitiga Rambut</span>
+          </button>
+          <button class="shape-choice-btn" data-shape="sphere">
+            <span class="shape-icon">⚪</span>
+            <span class="shape-name">Bola / Sphere</span>
+            <span class="shape-sub">Mata / Hidung / Anting</span>
+          </button>
+          <button class="shape-choice-btn" data-shape="cylinder">
+            <span class="shape-icon">🥫</span>
+            <span class="shape-name">Silinder / Cylinder</span>
+            <span class="shape-sub">Telinga / Tanduk</span>
+          </button>
+          <button class="shape-choice-btn" data-shape="box">
+            <span class="shape-icon">📦</span>
+            <span class="shape-name">Kotak / Box</span>
+            <span class="shape-sub">Aksesori / Balok</span>
+          </button>
+          <button class="shape-choice-btn" data-shape="torus">
+            <span class="shape-icon">🍩</span>
+            <span class="shape-name">Donat / Torus</span>
+            <span class="shape-sub">Cincin / Kacamata</span>
+          </button>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:16px;">Pengaturan Objek Baru</div>
+        <div class="control-row">
+          <label class="control-title" for="add-part-name">Nama Objek Baru</label>
+          <input type="text" id="add-part-name" class="text-input-field left-align" value="Spike_Rambut_Kustom">
+        </div>
+
+        <div class="control-row" style="margin-top:8px;">
+          <label class="control-title" for="add-part-parent">Tempelkan ke Tulang Rigging (Bone)</label>
+          <select id="add-part-parent" class="select-field">
+            <option value="head" selected>🦴 Kepala & Wajah (Head Bone)</option>
+            <option value="torso">🦴 Badan & Baju (Torso Bone)</option>
+            <option value="pelvis">🦴 Panggul & Pinggang (Pelvis Bone)</option>
+            <option value="arm_upper_l">🦴 Lengan Atas Kiri (Left Upper Arm)</option>
+            <option value="arm_lower_l">🦴 Siku & Tangan Kiri (Left Forearm & Hand)</option>
+            <option value="arm_upper_r">🦴 Lengan Atas Kanan (Right Upper Arm)</option>
+            <option value="arm_lower_r">🦴 Siku & Tangan Kanan (Right Forearm & Hand)</option>
+            <option value="leg_upper_l">🦴 Paha Kiri & Cuff (Left Thigh Bone)</option>
+            <option value="leg_lower_l">🦴 Lutut & Kaki Kiri (Left Knee Bone)</option>
+            <option value="leg_upper_r">🦴 Paha Kanan & Cuff (Right Thigh Bone)</option>
+            <option value="leg_lower_r">🦴 Lutut & Kaki Kanan (Right Knee Bone)</option>
+          </select>
+        </div>
+
+        <div class="control-row" style="margin-top:8px;">
+          <div class="control-label-group">
+            <label class="control-title" for="add-part-color">Warna Objek</label>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="add-part-color" value="#1e0f08">
+          </div>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:16px;">Preset Titik Penempatan Awal</div>
+        <div class="preset-pos-row">
+          <button class="preset-pos-btn" data-px="0" data-py="0.1" data-pz="1.48">Dahi Depan</button>
+          <button class="preset-pos-btn" data-px="-0.8" data-py="0.1" data-pz="1.4">Kiri Dahi</button>
+          <button class="preset-pos-btn" data-px="0.8" data-py="0.1" data-pz="1.4">Kanan Dahi</button>
+          <button class="preset-pos-btn" data-px="0" data-py="1.6" data-pz="0">Puncak Kepala</button>
+          <button class="preset-pos-btn" data-px="0" data-py="-0.2" data-pz="1.45">Tengah Wajah</button>
+        </div>
+
+        <input type="hidden" id="add-pos-x" value="0">
+        <input type="hidden" id="add-pos-y" value="0.1">
+        <input type="hidden" id="add-pos-z" value="1.48">
+
+        <button class="action-btn-primary" id="btn-add-part-confirm" style="margin-top:18px; width:100%;">
+          <span>➕</span> Buat & Pasang ke Model
+        </button>
+      </div>
+
+      <!-- TAB 1: WARNA -->
+      <div class="editor-tab-panel" id="tab-colors">
+        <div class="editor-section-header">Palet Warna Karakter</div>
+
+        <!-- Kulit -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-skin">Warna Kulit</label>
+            <span class="hex-badge" id="hex-skin">#FCD4B8</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-skin" value="#fcd4b8">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="skin" data-color-val="#fcd4b8" style="background:#fcd4b8;" title="Peach Terang"></span>
+              <span class="swatch-pill" data-color-target="skin" data-color-val="#ffdfba" style="background:#ffdfba;" title="Warm Peach"></span>
+              <span class="swatch-pill" data-color-target="skin" data-color-val="#f7c59f" style="background:#f7c59f;" title="Golden Sand"></span>
+              <span class="swatch-pill" data-color-target="skin" data-color-val="#c68642" style="background:#c68642;" title="Sawo Matang"></span>
+              <span class="swatch-pill" data-color-target="skin" data-color-val="#8d5524" style="background:#8d5524;" title="Cokelat Hangat"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rambut -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-hair">Warna Rambut</label>
+            <span class="hex-badge" id="hex-hair">#1E0F08</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-hair" value="#1e0f08">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="hair" data-color-val="#1e0f08" style="background:#1e0f08;" title="Cokelat Gelap"></span>
+              <span class="swatch-pill" data-color-target="hair" data-color-val="#111111" style="background:#111111;" title="Hitam Jet"></span>
+              <span class="swatch-pill" data-color-target="hair" data-color-val="#d4a359" style="background:#d4a359;" title="Pirang Madu"></span>
+              <span class="swatch-pill" data-color-target="hair" data-color-val="#ba68c8" style="background:#ba68c8;" title="Lavender"></span>
+              <span class="swatch-pill" data-color-target="hair" data-color-val="#00838f" style="background:#00838f;" title="Teal Cyan"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kaos -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-shirt">Warna Kaos</label>
+            <span class="hex-badge" id="hex-shirt">#C91815</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-shirt" value="#c91815">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="shirt" data-color-val="#c91815" style="background:#c91815;" title="Merah Klasik"></span>
+              <span class="swatch-pill" data-color-target="shirt" data-color-val="#1565c0" style="background:#1565c0;" title="Biru Royal"></span>
+              <span class="swatch-pill" data-color-target="shirt" data-color-val="#2e7d32" style="background:#2e7d32;" title="Hijau Hutan"></span>
+              <span class="swatch-pill" data-color-target="shirt" data-color-val="#f57f17" style="background:#f57f17;" title="Oranye Cerah"></span>
+              <span class="swatch-pill" data-color-target="shirt" data-color-val="#263238" style="background:#263238;" title="Abu Gelap"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Celana -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-shorts">Warna Celana</label>
+            <span class="hex-badge" id="hex-shorts">#161E2B</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-shorts" value="#161e2b">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="shorts" data-color-val="#161e2b" style="background:#161e2b;" title="Navy Gelap"></span>
+              <span class="swatch-pill" data-color-target="shorts" data-color-val="#37474f" style="background:#37474f;" title="Denim"></span>
+              <span class="swatch-pill" data-color-target="shorts" data-color-val="#8d6e63" style="background:#8d6e63;" title="Khaki Cokelat"></span>
+              <span class="swatch-pill" data-color-target="shorts" data-color-val="#ffffff" style="background:#ffffff;" title="Putih"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sepatu -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-shoes">Warna Sepatu</label>
+            <span class="hex-badge" id="hex-shoes">#1458B8</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-shoes" value="#1458b8">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="shoes" data-color-val="#1458b8" style="background:#1458b8;" title="Biru Sneaker"></span>
+              <span class="swatch-pill" data-color-target="shoes" data-color-val="#d50000" style="background:#d50000;" title="Merah"></span>
+              <span class="swatch-pill" data-color-target="shoes" data-color-val="#4e342e" style="background:#4e342e;" title="Kulit Cokelat"></span>
+              <span class="swatch-pill" data-color-target="shoes" data-color-val="#212121" style="background:#212121;" title="Hitam"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mata & Pipi -->
+        <div class="control-row-grid">
+          <div class="control-row-compact">
+            <label class="control-title" for="color-eyes">Warna Mata</label>
+            <div class="color-picker-compact">
+              <input type="color" id="color-eyes" value="#111111">
+              <span class="hex-badge-compact" id="hex-eyes">#111111</span>
+            </div>
+          </div>
+          <div class="control-row-compact">
+            <label class="control-title" for="color-cheeks">Rona Pipi</label>
+            <div class="color-picker-compact">
+              <input type="color" id="color-cheeks" value="#ff7777">
+              <span class="hex-badge-compact" id="hex-cheeks">#FF7777</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: KAOS & BADGE -->
+      <div class="editor-tab-panel" id="tab-badge">
+        <div class="editor-section-header">Emblem Dada Kaos</div>
+
+        <!-- Karakter Badge -->
+        <div class="control-row">
+          <label class="control-title" for="input-badge-text">Angka / Huruf / Simbol</label>
+          <input type="text" id="input-badge-text" class="text-input-field" maxlength="3" value="1" placeholder="1">
+          <div class="quick-emblem-row">
+            <button class="badge-quick-btn" data-symbol="1">1</button>
+            <button class="badge-quick-btn" data-symbol="2">2</button>
+            <button class="badge-quick-btn" data-symbol="7">7</button>
+            <button class="badge-quick-btn" data-symbol="A">A</button>
+            <button class="badge-quick-btn" data-symbol="★">★</button>
+            <button class="badge-quick-btn" data-symbol="♥">♥</button>
+            <button class="badge-quick-btn" data-symbol="🍃">🍃</button>
+          </div>
+        </div>
+
+        <!-- Bentuk Badge -->
+        <div class="control-row">
+          <label class="control-title" for="select-badge-shape">Bentuk Latar Badge</label>
+          <select id="select-badge-shape" class="select-field">
+            <option value="rounded-rect" selected>Persegi Melengkung (Rounded Rect)</option>
+            <option value="circle">Lingkaran (Circle)</option>
+            <option value="none">Tanpa Badge (Polos)</option>
+          </select>
+        </div>
+
+        <!-- Warna Latar Badge -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-badgeBg">Warna Latar Badge</label>
+            <span class="hex-badge" id="hex-badgeBg">#00BFE6</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-badgeBg" value="#00bfe6">
+            <div class="swatch-pills">
+              <span class="swatch-pill" data-color-target="badgeBg" data-color-val="#00bfe6" style="background:#00bfe6;" title="Cyan Master"></span>
+              <span class="swatch-pill" data-color-target="badgeBg" data-color-val="#ffd600" style="background:#ffd600;" title="Gold Yellow"></span>
+              <span class="swatch-pill" data-color-target="badgeBg" data-color-val="#ffffff" style="background:#ffffff;" title="Putih"></span>
+              <span class="swatch-pill" data-color-target="badgeBg" data-color-val="#212121" style="background:#212121;" title="Hitam"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warna Teks Badge -->
+        <div class="control-row">
+          <div class="control-label-group">
+            <label class="control-title" for="color-badgeText">Warna Teks Badge</label>
+            <span class="hex-badge" id="hex-badgeText">#FFFFFF</span>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="color-badgeText" value="#ffffff">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: PROPORSI -->
+      <div class="editor-tab-panel" id="tab-proportions">
+        <div class="editor-section-header">Morfologi & Proporsi Tubuh</div>
+
+        <!-- Lebar Kepala -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="slider-head-x">Lebar Kepala (X)</label>
+            <span class="slider-val" id="val-head-x">1.00×</span>
+          </div>
+          <input type="range" id="slider-head-x" min="0.85" max="1.25" step="0.01" value="1.00">
+          <div class="slider-hints"><span>Ramping</span><span>Standar</span><span>Lebar</span></div>
+        </div>
+
+        <!-- Tinggi Kepala -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="slider-head-y">Tinggi Kepala (Y)</label>
+            <span class="slider-val" id="val-head-y">1.00×</span>
+          </div>
+          <input type="range" id="slider-head-y" min="0.85" max="1.18" step="0.01" value="1.00">
+          <div class="slider-hints"><span>Memadat</span><span>Standar</span><span>Tinggi</span></div>
+        </div>
+
+        <!-- Ukuran Telinga -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="slider-ear-scale">Ukuran Telinga</label>
+            <span class="slider-val" id="val-ear-scale">1.00×</span>
+          </div>
+          <input type="range" id="slider-ear-scale" min="0.70" max="1.45" step="0.01" value="1.00">
+          <div class="slider-hints"><span>Mungil</span><span>Standar</span><span>Caplang</span></div>
+        </div>
+
+        <!-- Ketebalan Badan -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="slider-body-chubby">Ketebalan Badan (Chubby)</label>
+            <span class="slider-val" id="val-body-chubby">1.00×</span>
+          </div>
+          <input type="range" id="slider-body-chubby" min="0.85" max="1.25" step="0.01" value="1.00">
+          <div class="slider-hints"><span>Langsing</span><span>Standar</span><span>Buncit Chubby</span></div>
+        </div>
+
+        <!-- Sudut Ayunan Lengan -->
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="slider-arm-angle">Sudut Rentang Lengan</label>
+            <span class="slider-val" id="val-arm-angle">0.28×</span>
+          </div>
+          <input type="range" id="slider-arm-angle" min="0.10" max="0.48" step="0.01" value="0.28">
+          <div class="slider-hints"><span>Rapat</span><span>Santai</span><span>Terentang</span></div>
+        </div>
+      </div>
+
+      <!-- TAB 4: GAYA & WAJAH -->
+      <div class="editor-tab-panel" id="tab-style">
+        <div class="editor-section-header">Gaya Rambut</div>
+        <div class="button-toggle-grid">
+          <button class="hair-btn active" data-style="bowl-cut">🥣 Mangkok (Bowl)</button>
+          <button class="hair-btn" data-style="short">✂️ Pendek (Short)</button>
+          <button class="hair-btn" data-style="spiky">⚡ Spiky Bangs</button>
+          <button class="hair-btn" data-style="bald">🥚 Polos (Bald)</button>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:20px;">Ekspresi Mulut</div>
+        <div class="button-toggle-grid">
+          <button class="mouth-btn active" data-mouth="smile">😊 Senyum</button>
+          <button class="mouth-btn" data-mouth="laugh">😄 Tertawa</button>
+          <button class="mouth-btn" data-mouth="neutral">😐 Tenang</button>
+          <button class="mouth-btn" data-mouth="surprised">😲 Kaget</button>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:20px;">Gaya Mata</div>
+        <div class="button-toggle-grid">
+          <button class="eye-btn active" data-eye="oval">👀 Mata Bulat</button>
+          <button class="eye-btn" data-eye="wink">😉 Kedip (Wink)</button>
+        </div>
+
+        <div class="toggle-row" style="margin-top:20px;">
+          <div class="toggle-label-wrap">
+            <span class="control-title">Rona Pipi Merah Muda (Blush)</span>
+            <span class="toggle-sub">Efek rona pipi ceria khas villager</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-blush" checked>
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- TAB: GERAK & POSE SENDI -->
+      <div class="editor-tab-panel" id="tab-motion">
+        <div class="editor-section-header">Preset Gerak (Motion Library)</div>
+        <div class="motion-preset-grid">
+          <button class="motion-btn active" data-motion="idle">
+            <span class="motion-icon">🌸</span>
+            <span class="motion-label">Santai (Idle)</span>
+          </button>
+          <button class="motion-btn" data-motion="walk">
+            <span class="motion-icon">🚶</span>
+            <span class="motion-label">Jalan (Walk)</span>
+          </button>
+          <button class="motion-btn" data-motion="run">
+            <span class="motion-icon">🏃</span>
+            <span class="motion-label">Lari (Run)</span>
+          </button>
+          <button class="motion-btn" data-motion="wave">
+            <span class="motion-icon">👋</span>
+            <span class="motion-label">Melambai (Wave)</span>
+          </button>
+          <button class="motion-btn" data-motion="dance">
+            <span class="motion-icon">💃</span>
+            <span class="motion-label">Menari (Dance)</span>
+          </button>
+          <button class="motion-btn" data-motion="cheer">
+            <span class="motion-icon">🤸</span>
+            <span class="motion-label">Melompat (Cheer)</span>
+          </button>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:20px;">Kontrol Pemutaran Animasi</div>
+        <div class="playback-controls-row">
+          <button class="action-btn-secondary" id="btn-motion-toggle-pause" style="flex:1;">
+            <span id="motion-pause-icon">⏸️</span> <span id="motion-pause-text">Jeda Gerakan</span>
+          </button>
+        </div>
+
+        <div class="slider-group" style="margin-top:14px;">
+          <div class="slider-header">
+            <label for="slider-motion-speed">Kecepatan Animasi (Speed)</label>
+            <span class="slider-val" id="val-motion-speed">1.0×</span>
+          </div>
+          <input type="range" id="slider-motion-speed" min="0.2" max="2.5" step="0.1" value="1.0">
+          <div class="slider-hints"><span>Lambat (0.2×)</span><span>Normal (1.0×)</span><span>Cepat (2.5×)</span></div>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:22px;">Mode Pose Manual (FK Rigging Sendi)</div>
+        <div class="tree-hint-text">Atur sudut rotasi tiap sendi secara manual (Forward Kinematics).</div>
+
+        <div class="quick-action-grid" style="margin-top:8px;">
+          <button class="action-btn-primary" id="btn-toggle-manual-pose">
+            <span>🖐️</span> Aktifkan Pose Manual
+          </button>
+          <button class="action-btn-secondary" id="btn-reset-fk-pose">
+            <span>⟲</span> Reset Sendi
+          </button>
+        </div>
+
+        <div style="margin-top:8px;">
+          <button class="action-btn-secondary" id="btn-toggle-skeleton" style="width:100%;">
+            <span>🦴</span> <span id="skeleton-toggle-text">Tampilkan Sendi & Skeleton</span>
+          </button>
+        </div>
+
+        <!-- Panel Kontrol Sendi FK -->
+        <div id="fk-controls-container" class="fk-controls-panel" style="margin-top:14px;">
+          <!-- KEPALA -->
+          <div class="transform-section">
+            <div class="section-title-sm">🧠 Sendi Leher / Kepala (Head)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">Pitch</span>
+              <input type="range" id="slider-fk-head-x" min="-35" max="35" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-head-x">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Yaw</span>
+              <input type="range" id="slider-fk-head-y" min="-45" max="45" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-head-y">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">Roll</span>
+              <input type="range" id="slider-fk-head-z" min="-25" max="25" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-head-z">0°</span>
+            </div>
+          </div>
+
+          <!-- LENGAN & SIKU KIRI -->
+          <div class="transform-section">
+            <div class="section-title-sm">🦾 Lengan & Siku Kiri (Left Arm & Elbow)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">Bahu Pitch</span>
+              <input type="range" id="slider-fk-larm-x" min="-110" max="90" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-larm-x">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">Bahu Rentang</span>
+              <input type="range" id="slider-fk-larm-roll" min="-45" max="85" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-larm-roll">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Tekukan Siku</span>
+              <input type="range" id="slider-fk-lelbow-flex" min="0" max="120" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-lelbow-flex">0°</span>
+            </div>
+          </div>
+
+          <!-- LENGAN & SIKU KANAN -->
+          <div class="transform-section">
+            <div class="section-title-sm">🦾 Lengan & Siku Kanan (Right Arm & Elbow)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">Bahu Pitch</span>
+              <input type="range" id="slider-fk-rarm-x" min="-110" max="90" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-rarm-x">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-z">Bahu Rentang</span>
+              <input type="range" id="slider-fk-rarm-roll" min="-45" max="85" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-rarm-roll">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Tekukan Siku</span>
+              <input type="range" id="slider-fk-relbow-flex" min="0" max="120" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-relbow-flex">0°</span>
+            </div>
+          </div>
+
+          <!-- PINGGUL & LUTUT KIRI -->
+          <div class="transform-section">
+            <div class="section-title-sm">🦵 Kaki & Lutut Kiri (Left Leg & Knee)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">Ayun Paha</span>
+              <input type="range" id="slider-fk-lleg-x" min="-70" max="70" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-lleg-x">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Tekukan Lutut</span>
+              <input type="range" id="slider-fk-lknee-flex" min="0" max="110" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-lknee-flex">0°</span>
+            </div>
+          </div>
+
+          <!-- PINGGUL & LUTUT KANAN -->
+          <div class="transform-section">
+            <div class="section-title-sm">🦵 Kaki & Lutut Kanan (Right Leg & Knee)</div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-x">Ayun Paha</span>
+              <input type="range" id="slider-fk-rleg-x" min="-70" max="70" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-rleg-x">0°</span>
+            </div>
+            <div class="transform-axis-row">
+              <span class="axis-tag tag-y">Tekukan Lutut</span>
+              <input type="range" id="slider-fk-rknee-flex" min="0" max="110" step="1" value="0">
+              <span class="slider-val-sm" id="val-fk-rknee-flex">0°</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: PRESET & EKSPOR -->
+      <div class="editor-tab-panel" id="tab-presets">
+        <div class="editor-section-header">Aksi Cepat</div>
+        <div class="quick-action-grid">
+          <button class="action-btn-primary" id="btn-randomize">
+            <span>🎲</span> Acak Karakter
+          </button>
+          <button class="action-btn-secondary" id="btn-reset-char">
+            <span>⟲</span> Reset ke Master V1
+          </button>
+        </div>
+
+        <div class="editor-section-header" style="margin-top:20px;">Koleksi Preset Karakter</div>
+        <div class="preset-cards-list" id="preset-cards-container">
+          <!-- Populated dynamically by editor.js -->
+        </div>
+
+        <div class="editor-section-header" style="margin-top:20px;">Simpan, Muat & Ekspor 3D</div>
+        <div class="export-actions-list">
+          <button class="export-btn" id="btn-export-json">
+            <span>📥</span> Unduh Konfigurasi (JSON)
+          </button>
+          <button class="export-btn" id="btn-import-json">
+            <span>📤</span> Muat Konfigurasi (JSON)
+          </button>
+          <input type="file" id="input-import-file" accept=".json" style="display:none;">
+
+          <button class="export-btn highlight" id="btn-export-glb">
+            <span>📦</span> Ekspor Model 3D (.GLB)
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Specification Slide Drawer -->
+  <aside class="spec-drawer" id="spec-drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">Kesesuaian Spesifikasi (spec.md)</div>
+      <button class="close-btn" id="btn-close-spec">✕</button>
+    </div>
+
+    <div class="drawer-content">
+      <!-- Section: Visual Acceptance Criteria -->
+      <div>
+        <div class="spec-section-title">Kriteria Penerimaan Visual (14 Poin)</div>
+        <ul class="criteria-list">
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Tepat 1 Karakter:</strong> Karakter tunggal berdiri di atas pedestal studio.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Seluruh Tubuh Terlihat:</strong> Dari ujung rambut mangkok hingga sol sepatu sneaker.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Kemiripan Referensi:</strong> Proporsi anak laki-laki villager (Animal Crossing style).</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Bentuk Kepala:</strong> Siluet oval-squircle yang bulat, pipi chubby, dan proporsional.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Fitur Wajah Sederhana:</strong> Dua mata oval hitam dengan kilau putih, hidung mungil, senyum manis ramah.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Rambut Bowl-Cut 3D:</strong> Model rambut cokelat gelap dengan 3 gerigi poni khas di dahi.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Baju Merah No. 1:</strong> Kaos merah terang dengan badge cyan dan angka "1" putih yang jelas.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Celana & Sepatu:</strong> Celana pendek biru navy dan sepatu sneaker biru bersol putih tebal.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Anatomi Stylized:</strong> Tangan bulat dengan jempol khas villager, tanpa jari realistis berlebihan.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Material Halus & Matte:</strong> MeshStandardMaterial dengan roughness seimbang tanpa kilap plastik.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Pencahayaan Studio:</strong> Key light lembut, fill light seimbang, dan soft contact shadow di lantai.</span>
+          </li>
+          <li class="criteria-item">
+            <span class="criteria-icon">✓</span>
+            <span><strong>Pose Netral:</strong> Pose santai berdiri menghadap sudut tiga perempat (15-20°).</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Section: Proportions Table -->
+      <div>
+        <div class="spec-section-title">Target Proporsi Model (100 Unit)</div>
+        <table class="proportions-table">
+          <thead>
+            <tr>
+              <th>Bagian Tubuh</th>
+              <th>Target Spec</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Tinggi Kepala (termasuk rambut)</td>
+              <td>35 – 40 unit</td>
+              <td>Tercapai (~36 unit)</td>
+            </tr>
+            <tr>
+              <td>Lebar Kepala</td>
+              <td>30 – 33 unit</td>
+              <td>Tercapai (~32 unit)</td>
+            </tr>
+            <tr>
+              <td>Torso & Pelvis</td>
+              <td>24 – 27 unit</td>
+              <td>Tercapai (~25 unit)</td>
+            </tr>
+            <tr>
+              <td>Kaki & Sepatu</td>
+              <td>30 – 35 unit</td>
+              <td>Tercapai (~32 unit)</td>
+            </tr>
+            <tr>
+              <td>Panjang Lengan</td>
+              <td>Mencapai paha atas</td>
+              <td>Tercapai</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section: Color Palette -->
+      <div>
+        <div class="spec-section-title">Palet Warna Resmi</div>
+        <div class="palette-grid">
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #361f14;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Rambut Cokelat</span>
+              <span class="swatch-hex">#361F14</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #fcd5b8;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Kulit Peach</span>
+              <span class="swatch-hex">#FCD5B8</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #dc2622;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Baju Merah</span>
+              <span class="swatch-hex">#DC2622</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #00b8e6;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Badge No. 1</span>
+              <span class="swatch-hex">#00B8E6</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #1e293b;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Celana Navy</span>
+              <span class="swatch-hex">#1E293B</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #1d62c2;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Sepatu Biru</span>
+              <span class="swatch-hex">#1D62C2</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #f8f9fa; border-color: #cbd5e1;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Sol Sepatu Putih</span>
+              <span class="swatch-hex">#F8F9FA</span>
+            </div>
+          </div>
+          <div class="palette-card">
+            <div class="color-swatch" style="background: #181818;"></div>
+            <div class="swatch-info">
+              <span class="swatch-name">Mata Hitam</span>
+              <span class="swatch-hex">#181818</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Local Three.js Libraries (Fast, Offline & CDN Fallback) -->
+  <script src="vendor/three.min.js"></script>
+  <script>
+    if (!window.THREE) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+    }
+  </script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script>
+    if (!window.THREE || !THREE.OrbitControls) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
+    }
+  </script>
+  <script src="vendor/GLTFLoader.js"></script>
+  <script src="vendor/GLTFExporter.js"></script>
+  <script src="scene_data.js"></script>
+
+  <!-- Character Model, Editor & Application -->
+  <script src="character.js"></script>
+  <script src="editor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,16 @@
+{
+  "name": "barucoba",
+  "version": "1.0.0",
+  "description": "Proyek 3D karakter bergaya game simulasi kehidupan (*Animal Crossing Villager*) yang dibuat menggunakan **HTML5**, **CSS3**, dan **Three.js**.",
+  "main": "app.js",
+  "scripts": {
+    "test": "node test_e2e.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.64.0"
+  }
+}
